@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  role      Role     @default(TEACHER)
+  forms     Form[]
+}
+
+model Form {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  fields      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  teacherId   String
+  isActive    Boolean      @default(true)
+  teacher     Teacher      @relation(fields: [teacherId], references: [id])
+  submissions Submission[]
+  analytics   FormAnalytics?
+}
+
+model Submission {
+  id           String   @id @default(cuid())
+  formId       String
+  data         Json
+  studentName  String
+  studentEmail String
+  studentRoll  String
+  createdAt    DateTime @default(now())
+  form         Form     @relation(fields: [formId], references: [id])
+
+  @@unique([formId, studentRoll], name: "unique_student_submission")
+}
+
+model FormAnalytics {
+  id        String   @id @default(cuid())
+  formId    String   @unique
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  form      Form @relation(fields: [formId], references: [id])
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+}

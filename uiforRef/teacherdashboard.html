@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>College Administration Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#1152d4",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .active-link { @apply bg-primary/10 text-primary border-r-4 border-primary; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display">
+<div class="flex min-h-screen">
+<!-- Side Navigation -->
+<aside class="w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col fixed h-full">
+<div class="p-6 flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined">school</span>
+</div>
+<div>
+<h1 class="font-bold text-slate-900 dark:text-white leading-tight">College Admin</h1>
+<p class="text-xs text-slate-500 dark:text-slate-400">Academic Portal v2.0</p>
+</div>
+</div>
+<nav class="flex-1 mt-4 px-3 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 text-primary font-semibold" href="#">
+<span class="material-symbols-outlined text-[22px]">dashboard</span>
+<span class="text-sm">Overview</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[22px]">add_box</span>
+<span class="text-sm font-medium">Create Form</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[22px]">history_edu</span>
+<span class="text-sm font-medium">Previous Forms</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">
+<span class="material-symbols-outlined text-[22px]">analytics</span>
+<span class="text-sm font-medium">Analytics</span>
+</a>
+</nav>
+<div class="p-4 border-t border-slate-200 dark:border-slate-800">
+<div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl flex items-center gap-3">
+<div class="size-10 rounded-full bg-slate-300 overflow-hidden">
+<img alt="Admin Portrait" data-alt="Professional headshot of a male college administrator" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtiPl96yxF3IenqH2wWLIzDvcconNMsaf0wBRceuTaPRfto37Crxu3bW7m3HwnVzH_x5Cn9nAGUiMr-QZRCoVW7g9f9i7MXEaWHCtGN43QFwYwcSqjQl4ztStOk1O4GPqE415bHsyzNIawZznRnUOydKmaGcY7wMCZ5kJZBge5Kv3y8VQO2mHK7SXZogb7kWdE8hW0DbgNZFUhXO8EYqEHIa6eiMyU3vlzFnpvGxsm8aHRUenwx0Zgi95v4QQp0YHkdRvtVUrKT9w"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-semibold truncate">Dr. Julian Vance</p>
+<p class="text-xs text-slate-500 truncate">Dean of Admissions</p>
+</div>
+<button class="text-slate-400 hover:text-primary">
+<span class="material-symbols-outlined text-xl">settings</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-72 flex-1 p-8">
+<!-- Header Section -->
+<header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+<div>
+<h2 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Dashboard Overview</h2>
+<p class="text-slate-500 dark:text-slate-400">Welcome back to the administrative control center.</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50">
+<span class="material-symbols-outlined text-xl">download</span>
+                        Export Report
+                    </button>
+<button class="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-lg font-semibold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
+<span class="material-symbols-outlined text-xl">add</span>
+                        Create New Form
+                    </button>
+</div>
+</header>
+<!-- Stats Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="p-2 bg-primary/10 rounded-lg">
+<span class="material-symbols-outlined text-primary">description</span>
+</div>
+<span class="text-emerald-600 text-xs font-bold px-2 py-1 bg-emerald-50 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +12%
+                        </span>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Forms Created</p>
+<p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">128</p>
+<div class="mt-4 w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 75%"></div>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="p-2 bg-primary/10 rounded-lg">
+<span class="material-symbols-outlined text-primary">groups</span>
+</div>
+<span class="text-emerald-600 text-xs font-bold px-2 py-1 bg-emerald-50 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +5.2%
+                        </span>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Responses</p>
+<p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">4,250</p>
+<div class="mt-4 w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 60%"></div>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="p-2 bg-primary/10 rounded-lg">
+<span class="material-symbols-outlined text-primary">person_check</span>
+</div>
+<span class="text-amber-600 text-xs font-bold px-2 py-1 bg-amber-50 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">horizontal_rule</span> stable
+                        </span>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Active Users</p>
+<p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">850</p>
+<div class="mt-4 w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 85%"></div>
+</div>
+</div>
+</div>
+<!-- Main Panel: Activity & Quick Stats -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Recent Activity -->
+<div class="lg:col-span-2 space-y-4">
+<div class="flex items-center justify-between px-2">
+<h3 class="text-xl font-bold text-slate-900 dark:text-white">Recent Activity</h3>
+<button class="text-primary text-sm font-semibold hover:underline">View All</button>
+</div>
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+<!-- Activity Item -->
+<div class="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+<div class="flex items-center gap-4">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">assignment</span>
+</div>
+<div>
+<p class="text-slate-900 dark:text-slate-100 font-semibold">Student Feedback Form 2024</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm">32 new responses received from Faculty of Engineering</p>
+</div>
+</div>
+<span class="text-slate-400 text-xs font-medium">2h ago</span>
+</div>
+<!-- Activity Item -->
+<div class="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+<div class="flex items-center gap-4">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">verified</span>
+</div>
+<div>
+<p class="text-slate-900 dark:text-slate-100 font-semibold">Scholarship Application Process</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Automated evaluation completed for 150 entries</p>
+</div>
+</div>
+<span class="text-slate-400 text-xs font-medium">5h ago</span>
+</div>
+<!-- Activity Item -->
+<div class="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+<div class="flex items-center gap-4">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">person_add</span>
+</div>
+<div>
+<p class="text-slate-900 dark:text-slate-100 font-semibold">New User Registration</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Admin access granted to 3 new departmental heads</p>
+</div>
+</div>
+<span class="text-slate-400 text-xs font-medium">Yesterday</span>
+</div>
+</div>
+</div>
+<!-- Right Sidebar: Quick Insights -->
+<div class="space-y-6">
+<div class="bg-primary text-white p-6 rounded-2xl relative overflow-hidden shadow-xl">
+<div class="relative z-10">
+<h4 class="text-lg font-bold mb-2">Need Assistance?</h4>
+<p class="text-white/80 text-sm mb-4">Our administrative support team is available 24/7 for technical issues.</p>
+<button class="bg-white text-primary px-4 py-2 rounded-lg text-sm font-bold hover:bg-opacity-90 transition-all">
+                                Contact Support
+                            </button>
+</div>
+<span class="material-symbols-outlined absolute -right-4 -bottom-4 text-white/10 text-9xl">support_agent</span>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
+<h4 class="text-slate-900 dark:text-white font-bold mb-4">Submission Trends</h4>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<span class="text-sm text-slate-500">Engineering</span>
+<span class="text-sm font-bold">45%</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full">
+<div class="bg-primary h-full rounded-full" style="width: 45%"></div>
+</div>
+<div class="flex items-center justify-between mt-4">
+<span class="text-sm text-slate-500">Business School</span>
+<span class="text-sm font-bold">32%</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full">
+<div class="bg-primary h-full rounded-full" style="width: 32%"></div>
+</div>
+<div class="flex items-center justify-between mt-4">
+<span class="text-sm text-slate-500">Arts &amp; Design</span>
+<span class="text-sm font-bold">23%</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full">
+<div class="bg-primary h-full rounded-full" style="width: 23%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

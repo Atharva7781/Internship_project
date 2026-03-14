@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/container-queries";
+
+/* 
+  Force "class" strategy for dark mode.
+  This overrides the default media-query based dark mode.
+  Dark mode will ONLY apply if the class "dark" is present on a parent.
+*/
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Explicitly tell the browser to render system controls (scrollbars, inputs) in light mode */
+  color-scheme: light;
+  
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-primary: #1152d4;
+  --color-background-light: #f6f6f8;
+  --color-background-dark: #101622;
+  --font-display: "Inter", sans-serif;
+}
+
+/* Ensure no dark media query overrides exist */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
