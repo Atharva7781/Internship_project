@@ -50,10 +50,13 @@ export async function GET(
 
   const buffer = await workbook.xlsx.writeBuffer()
 
+  // Sanitize the form title to remove non-ASCII characters that break the Content-Disposition header
+  const sanitizedTitle = form.title.replace(/[^\x00-\x7F]/g, "").replace(/[^a-zA-Z0-9-_ ]/g, "_") || "form_export"
+
   return new Response(buffer, {
     headers: {
       "Content-Disposition":
-        `attachment; filename=${form.title}.xlsx`,
+        `attachment; filename="${sanitizedTitle}.xlsx"`,
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     }

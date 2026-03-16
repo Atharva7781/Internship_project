@@ -225,6 +225,7 @@ export default function FormBuilder() {
                     <option value="select">Dropdown</option>
                     <option value="radio">Multiple Choice</option>
                     <option value="checkbox">Checkboxes</option>
+                    <option value="file">File Upload</option>
                   </select>
                 </div>
               </div>
@@ -290,6 +291,9 @@ export default function FormBuilder() {
           </button>
           <button onClick={() => addField('select')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
             <span className="material-symbols-outlined text-lg">arrow_drop_down_circle</span> Dropdown
+          </button>
+          <button onClick={() => addField('file')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
+            <span className="material-symbols-outlined text-lg">attach_file</span> File Upload
           </button>
         </div>
       </div>

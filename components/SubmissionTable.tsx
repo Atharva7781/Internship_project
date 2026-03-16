@@ -63,13 +63,44 @@ export default function SubmissionTable({ submissions }: { submissions: Submissi
                     <tr className="bg-slate-50 dark:bg-slate-800/50">
                       <td colSpan={5} className="px-6 py-4">
                         <div className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800">
-                          <h4 className="font-semibold text-slate-900 dark:text-white mb-2">Form Response:</h4>
-                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-auto max-h-60 bg-slate-50 dark:bg-slate-800 p-2 rounded">
-                            {typeof submission.data === 'string' 
-                              ? JSON.stringify(JSON.parse(submission.data), null, 2)
-                              : JSON.stringify(submission.data, null, 2)
+                          <h4 className="font-semibold text-slate-900 dark:text-white mb-3">Form Response</h4>
+                          {(() => {
+                            const payload = typeof submission.data === 'string' ? JSON.parse(submission.data) : submission.data
+                            const entries = Object.entries(payload || {})
+                            const isUrl = (val: string) => {
+                              return typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/uploads/') || /\.(pdf|docx?|xlsx?|png|jpg|jpeg|gif|pptx?)$/i.test(val))
                             }
-                          </pre>
+                            return (
+                              <div className="space-y-3">
+                                {entries.length === 0 ? (
+                                  <div className="text-slate-500 text-sm">No answers</div>
+                                ) : (
+                                  entries.map(([key, value]) => (
+                                    <div key={key} className="flex items-start gap-3">
+                                      <div className="min-w-36 text-xs font-medium text-slate-500">{key}</div>
+                                      <div className="text-sm text-slate-800 dark:text-slate-200">
+                                        {Array.isArray(value) ? (
+                                          value.length ? value.join(', ') : <span className="text-slate-500">Empty</span>
+                                        ) : typeof value === 'string' ? (
+                                          isUrl(value) ? (
+                                            <a href={value} target="_blank" className="text-primary hover:underline">Open document</a>
+                                          ) : (
+                                            value || <span className="text-slate-500">Empty</span>
+                                          )
+                                        ) : typeof value === 'number' ? (
+                                          value
+                                        ) : value ? (
+                                          JSON.stringify(value)
+                                        ) : (
+                                          <span className="text-slate-500">Empty</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            )
+                          })()}
                         </div>
                       </td>
                     </tr>

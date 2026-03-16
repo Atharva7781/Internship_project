@@ -73,6 +73,21 @@ export default function StudentForm({ form }: { form: any }) {
     setSubmissionData(prev => ({ ...prev, [fieldId]: value }));
   };
 
+  const handleFileChange = async (fieldId: string, file?: File | null) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data?.url) {
+        setSubmissionData(prev => ({ ...prev, [fieldId]: data.url }));
+      }
+    } catch (e) {
+      setError('Failed to upload file');
+    }
+  };
+
   if (submitted) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
@@ -220,6 +235,22 @@ export default function StudentForm({ form }: { form: any }) {
                     <option key={idx} value={opt}>{opt}</option>
                   ))}
                 </select>
+              )}
+
+              {field.type === 'file' && (
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    required={field.required}
+                    className="w-full rounded-lg border border-slate-300 px-4 py-2.5 bg-white"
+                    onChange={(e) => handleFileChange(field.id, e.target.files?.[0] ?? null)}
+                  />
+                  {submissionData[field.id] && (
+                    <a href={submissionData[field.id]} target="_blank" className="text-indigo-600 text-sm">
+                      Uploaded file
+                    </a>
+                  )}
+                </div>
               )}
 
               {field.type === 'radio' && field.options && (

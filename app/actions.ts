@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { buildAnalytics } from "@/lib/analytics";
 
-export type FieldType = 'text' | 'number' | 'checkbox' | 'radio' | 'select' | 'textarea';
+export type FieldType = 'text' | 'number' | 'checkbox' | 'radio' | 'select' | 'textarea' | 'file';
 
 export interface FormField {
   id: string;

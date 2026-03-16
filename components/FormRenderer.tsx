@@ -12,6 +12,21 @@ export default function FormRenderer({ formId, fields }: { formId: string, field
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
 
+  const handleFileChange = async (fieldId: string, file?: File | null) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data?.url) {
+        setFormData(prev => ({ ...prev, [fieldId]: data.url }));
+      }
+    } catch {
+      alert('File upload failed');
+    }
+  };
+
   const handleCheckboxChange = (fieldId: string, option: string, checked: boolean) => {
     const currentValues = (formData[fieldId] as string[]) || [];
     let newValues;
@@ -148,6 +163,22 @@ export default function FormRenderer({ formId, fields }: { formId: string, field
                   <span className="text-slate-700 dark:text-slate-300">{option}</span>
                 </label>
               ))}
+            </div>
+          )}
+
+          {field.type === 'file' && (
+            <div className="space-y-2">
+              <input
+                type="file"
+                required={field.required}
+                onChange={(e) => handleFileChange(field.id, e.target.files?.[0] ?? null)}
+                className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white text-slate-900 dark:text-white"
+              />
+              {formData[field.id] && (
+                <a href={formData[field.id]} target="_blank" className="text-primary text-sm hover:underline">
+                  Open uploaded file
+                </a>
+              )}
             </div>
           )}
         </div>
