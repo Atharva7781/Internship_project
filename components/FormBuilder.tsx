@@ -4,6 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { createForm, FieldType, FormField } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 import { FORM_TEMPLATES } from '@/lib/templates';
+import { generateId } from '@/lib/id';
 
 export default function FormBuilder() {
   const [title, setTitle] = useState('');
@@ -19,7 +20,7 @@ export default function FormBuilder() {
       // Create deep copy of fields with new IDs to avoid reference issues
       const newFields = template.fields.map(f => ({
         ...f,
-        id: crypto.randomUUID()
+        id: generateId()
       }));
       setTitle(template.title);
       setDescription(template.description);
@@ -29,7 +30,7 @@ export default function FormBuilder() {
 
   const addField = (type: FieldType) => {
     const newField: FormField = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       label: `New ${type} question`,
       type,
       required: false,
