@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import FormStatusToggle from '@/components/FormStatusToggle';
 import SubmissionTable from '@/components/SubmissionTable';
 import Link from 'next/link';
+import DeleteFormButton from '@/components/DeleteFormButton';
 
 interface FormDetailsPageProps {
   params: Promise<{ formId: string }>;
@@ -26,6 +27,14 @@ export default async function FormDetailsPage({ params }: FormDetailsPageProps) 
     createdAt: sub.createdAt.toISOString(),
     data: sub.data
   }));
+  const formFields = (() => {
+    try {
+      const parsed = JSON.parse(form.fields);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -44,6 +53,7 @@ export default async function FormDetailsPage({ params }: FormDetailsPageProps) 
             </div>
             <div className="flex items-center gap-3">
               <FormStatusToggle formId={form.id} initialStatus={form.isActive} />
+              <DeleteFormButton formId={form.id} />
               <Link 
                 href={`/forms/${form.id}`} 
                 target="_blank"
@@ -75,12 +85,20 @@ export default async function FormDetailsPage({ params }: FormDetailsPageProps) 
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+        <section className="mb-6">
+          <div className="mb-4 px-1">
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">Submissions</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Search, sort, and refine submissions with multiple filters.
+            </p>
           </div>
-          <SubmissionTable submissions={submissions} />
-        </div>
+          <SubmissionTable
+            submissions={submissions}
+            formFields={formFields}
+            formTitle={form.title}
+            formDescription={form.description}
+          />
+        </section>
       </div>
   );
 }

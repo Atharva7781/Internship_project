@@ -24,5 +24,5 @@ export default async function FormPage({ params }: { params: Promise<{ formId: s
     );
   }
 
-  return <StudentForm form={form} />;
+  return <StudentForm key={form.id} form={form} />;
 }

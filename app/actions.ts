@@ -242,3 +242,26 @@ export async function getFormDetails(formId: string) {
     return null;
   }
 }
+
+export async function deleteForm(formId: string) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return { success: false, message: 'Unauthorized' };
+
+  try {
+    const form = await prisma.form.findUnique({ where: { id: formId } });
+    if (!form || form.teacherId !== session.user.id) {
+      return { success: false, message: 'Form not found or unauthorized' };
+    }
+
+    await prisma.formAnalytics.deleteMany({ where: { formId } });
+    await prisma.submission.deleteMany({ where: { formId } });
+    await prisma.form.delete({ where: { id: formId } });
+
+    revalidatePath('/teacher-dashboard');
+    revalidatePath('/teacher-dashboard/history');
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete form:', error);
+    return { success: false, message: 'Failed to delete form' };
+  }
+}

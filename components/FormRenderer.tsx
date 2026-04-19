@@ -3,10 +3,22 @@
 import React, { useState, useTransition } from 'react';
 import { FormField, submitForm } from '@/app/actions';
 
+interface StudentDetails {
+  name: string;
+  email: string;
+  roll: string;
+}
+
 export default function FormRenderer({ formId, fields }: { formId: string, fields: FormField[] }) {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isPending, startTransition] = useTransition();
   const [submitted, setSubmitted] = useState(false);
+  const [showModal, setShowModal] = useState(true);
+  const [studentDetails, setStudentDetails] = useState<StudentDetails>({
+    name: '',
+    email: '',
+    roll: '',
+  });
 
   const handleChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
@@ -53,7 +65,7 @@ export default function FormRenderer({ formId, fields }: { formId: string, field
     }
 
     startTransition(async () => {
-      const result = await submitForm(formId, formData);
+      const result = await submitForm(formId, formData, studentDetails);
       if (result.success) {
         setSubmitted(true);
       } else {
@@ -81,7 +93,64 @@ export default function FormRenderer({ formId, fields }: { formId: string, field
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <div>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-bold text-slate-900">Student Details</h2>
+              <p className="text-sm text-slate-600 mt-1">Enter your details to submit this form</p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (studentDetails.name && studentDetails.email && studentDetails.roll) setShowModal(false);
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  value={studentDetails.name}
+                  onChange={(e) => setStudentDetails({ ...studentDetails, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  value={studentDetails.email}
+                  onChange={(e) => setStudentDetails({ ...studentDetails, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Roll Number</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  value={studentDetails.roll}
+                  onChange={(e) => setStudentDetails({ ...studentDetails, roll: e.target.value })}
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-indigo-600 px-4 py-3 text-white font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+              >
+                Continue
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className={`space-y-8 ${showModal ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
       {fields.map((field) => (
         <div key={field.id} className="space-y-2">
           <label className="block text-sm font-semibold text-slate-900 dark:text-white">
@@ -203,6 +272,7 @@ export default function FormRenderer({ formId, fields }: { formId: string, field
           )}
         </button>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }
