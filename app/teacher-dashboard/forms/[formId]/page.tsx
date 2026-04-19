@@ -39,7 +39,7 @@ export default async function FormDetailsPage({ params }: FormDetailsPageProps) 
   return (
     <div className="max-w-6xl mx-auto">
         <header className="mb-8">
-          <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm mb-2">
             <Link href="/teacher-dashboard" className="hover:text-primary transition-colors">Dashboard</Link>
             <span className="material-symbols-outlined text-[16px]">chevron_right</span>
             <Link href="/teacher-dashboard/history" className="hover:text-primary transition-colors">History</Link>
@@ -49,7 +49,7 @@ export default async function FormDetailsPage({ params }: FormDetailsPageProps) 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{form.title}</h1>
-              <p className="text-slate-500 dark:text-slate-400 mt-1">{form.description}</p>
+              <p className="text-slate-600 dark:text-slate-400 mt-1">{form.description}</p>
             </div>
             <div className="flex items-center gap-3">
               <FormStatusToggle formId={form.id} initialStatus={form.isActive} />
@@ -57,7 +57,7 @@ export default async function FormDetailsPage({ params }: FormDetailsPageProps) 
               <Link 
                 href={`/forms/${form.id}`} 
                 target="_blank"
-                className="px-4 py-2 bg-primary text-white rounded-lg font-semibold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white shadow-sm hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
                 <span className="material-symbols-outlined text-[18px]">visibility</span>
                 View Public Form

@@ -146,6 +146,56 @@ export async function getTeacherForms() {
   }
 }
 
+export async function getTeacherOverviewStats() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return null;
+
+  try {
+    const teacherId = session.user.id;
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [totalForms, activeForms, totalResponses, responsesLast7Days, latestSubmission, topForm] = await Promise.all([
+      prisma.form.count({ where: { teacherId } }),
+      prisma.form.count({ where: { teacherId, isActive: true } }),
+      prisma.submission.count({ where: { form: { teacherId } } }),
+      prisma.submission.count({ where: { createdAt: { gte: sevenDaysAgo }, form: { teacherId } } }),
+      prisma.submission.aggregate({
+        where: { form: { teacherId } },
+        _max: { createdAt: true },
+      }),
+      prisma.form.findFirst({
+        where: { teacherId },
+        orderBy: { submissions: { _count: 'desc' } },
+        select: {
+          id: true,
+          title: true,
+          isActive: true,
+          createdAt: true,
+          _count: { select: { submissions: true } },
+        },
+      }),
+    ]);
+
+    const inactiveForms = Math.max(0, totalForms - activeForms);
+    const avgResponsesPerForm = totalForms === 0 ? 0 : totalResponses / totalForms;
+
+    return {
+      totalForms,
+      activeForms,
+      inactiveForms,
+      totalResponses,
+      responsesLast7Days,
+      avgResponsesPerForm,
+      lastSubmissionAt: latestSubmission._max.createdAt,
+      topForm,
+    };
+  } catch (error) {
+    console.error('Error fetching teacher overview stats:', error);
+    return null;
+  }
+}
+
 export async function getTeacherHistory(
   search?: string, 
   status?: 'active' | 'inactive' | 'all',

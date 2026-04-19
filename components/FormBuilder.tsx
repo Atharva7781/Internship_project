@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useEffect, useMemo, useState, useTransition } from 'react';
 import { createForm, FieldType, FormField } from '@/app/actions';
-import { useRouter } from 'next/navigation';
 import { FORM_TEMPLATES } from '@/lib/templates';
 import { generateId } from '@/lib/id';
 
@@ -12,7 +11,29 @@ export default function FormBuilder() {
   const [fields, setFields] = useState<FormField[]>([]);
   const [isPending, startTransition] = useTransition();
   const [createdFormId, setCreatedFormId] = useState<string | null>(null);
-  const router = useRouter();
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [showMoreFieldTypes, setShowMoreFieldTypes] = useState(false);
+
+  const formLink = useMemo(() => {
+    if (!createdFormId) return '';
+    return `${window.location.origin}/forms/${createdFormId}`;
+  }, [createdFormId]);
+
+  const qrUrl = useMemo(() => {
+    if (!formLink) return '';
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(formLink)}`;
+  }, [formLink]);
+
+  useEffect(() => {
+    if (!successOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSuccessOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [successOpen]);
 
   const handleTemplateSelect = (templateId: string) => {
     const template = FORM_TEMPLATES.find(t => t.id === templateId);
@@ -85,62 +106,150 @@ export default function FormBuilder() {
       const result = await createForm(null, formData);
       if (result.success && result.formId) {
         setCreatedFormId(result.formId);
+        setSuccessOpen(true);
+        setCopied(false);
       } else {
         alert(result.message || 'Failed to create form');
       }
     });
   };
 
-  if (createdFormId) {
-    const formLink = `${window.location.origin}/forms/${createdFormId}`;
-    return (
-      <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-sm text-center space-y-6">
-        <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-          <span className="material-symbols-outlined text-4xl">check_circle</span>
-        </div>
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Form Created Successfully!</h2>
-        <p className="text-slate-600 dark:text-slate-400">Share this link with your students:</p>
-        
-        <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-          <input 
-            readOnly 
-            value={formLink} 
-            className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 dark:text-slate-300 font-mono text-sm"
-          />
-          <button 
-            onClick={() => navigator.clipboard.writeText(formLink)}
-            className="text-primary hover:text-primary/80 font-medium text-sm"
-          >
-            Copy
-          </button>
-        </div>
-
-        <div className="flex justify-center gap-4 pt-4">
-          <button 
-            onClick={() => {
-              setCreatedFormId(null);
-              setTitle('');
-              setDescription('');
-              setFields([]);
-            }}
-            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-          >
-            Create Another
-          </button>
-          <a 
-            href={formLink}
-            target="_blank"
-            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-          >
-            View Form
-          </a>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-8">
+      {createdFormId && (
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-lg flex items-center justify-center">
+              <span className="material-symbols-outlined">check_circle</span>
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900 dark:text-white">Form created</p>
+              <button
+                type="button"
+                onClick={() => setSuccessOpen(true)}
+                className="text-sm text-primary hover:underline"
+              >
+                Copy link & QR code
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={formLink}
+              target="_blank"
+              className="px-4 py-2 bg-primary text-white rounded-lg font-semibold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">visibility</span>
+              View Form
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setCreatedFormId(null);
+                setSuccessOpen(false);
+                setCopied(false);
+                setTitle('');
+                setDescription('');
+                setFields([]);
+              }}
+              className="px-4 py-2 rounded-lg font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Create Another
+            </button>
+          </div>
+        </div>
+      )}
+
+      {successOpen && createdFormId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close"
+            onClick={() => setSuccessOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="form-created-title"
+            className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden"
+          >
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined">check_circle</span>
+                </div>
+                <div>
+                  <h2 id="form-created-title" className="text-lg font-bold text-slate-900 dark:text-white">
+                    Success
+                  </h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Copy the link or share via QR.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuccessOpen(false)}
+                className="size-10 inline-flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+                aria-label="Close dialog"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">Form Link</p>
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <input
+                    readOnly
+                    value={formLink}
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-slate-800 dark:text-slate-200 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(formLink);
+                        setCopied(true);
+                        window.setTimeout(() => setCopied(false), 1200);
+                      } catch {
+                        alert('Copy failed. Please copy manually.');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    {copied ? 'Copied' : 'Copy Link'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={formLink}
+                    target="_blank"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Open form
+                  </a>
+                  <a
+                    href={qrUrl}
+                    target="_blank"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Open QR image
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center justify-center gap-3">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">QR Code</p>
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+                  <img src={qrUrl} alt="QR code for the form link" className="w-[220px] h-[220px]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Template Selection */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
@@ -157,7 +266,7 @@ export default function FormBuilder() {
               <div className="font-medium text-slate-900 dark:text-white group-hover:text-primary mb-1">
                 {template.title}
               </div>
-              <div className="text-xs text-slate-500 line-clamp-2">
+              <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
                 {template.description}
               </div>
             </button>
@@ -190,7 +299,7 @@ export default function FormBuilder() {
 
       {/* Fields List */}
       <div className="space-y-4">
-        {fields.map((field, index) => (
+        {fields.map((field) => (
           <div key={field.id} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative group">
             <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
               <button 
@@ -277,25 +386,87 @@ export default function FormBuilder() {
 
         {/* Add Field Buttons */}
         <div className="flex flex-wrap gap-2 justify-center p-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl hover:border-primary/50 transition-colors bg-slate-50 dark:bg-slate-800/50">
-          <span className="w-full text-center text-sm text-slate-500 mb-2">Add a new question:</span>
-          <button onClick={() => addField('text')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">short_text</span> Short Answer
-          </button>
-          <button onClick={() => addField('textarea')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">notes</span> Paragraph
-          </button>
-          <button onClick={() => addField('radio')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">radio_button_checked</span> Multiple Choice
-          </button>
-          <button onClick={() => addField('checkbox')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">check_box</span> Checkboxes
-          </button>
-          <button onClick={() => addField('select')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">arrow_drop_down_circle</span> Dropdown
-          </button>
-          <button onClick={() => addField('file')} className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1">
-            <span className="material-symbols-outlined text-lg">attach_file</span> File Upload
-          </button>
+          <div className="w-full flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setAddMenuOpen((v) => !v)}
+              className="px-4 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[20px]">{addMenuOpen ? 'close' : 'add'}</span>
+              Add Question
+            </button>
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              {addMenuOpen ? 'Choose a type to add.' : 'Keep the form simple until you need more.'}
+            </span>
+          </div>
+
+          {addMenuOpen && (
+            <div className="w-full mt-3 flex flex-col items-center gap-3">
+              <div className="flex flex-wrap gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() => addField('text')}
+                  className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-lg">short_text</span> Short Answer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addField('textarea')}
+                  className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-lg">notes</span> Paragraph
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addField('radio')}
+                  className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-lg">radio_button_checked</span> Multiple Choice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addField('select')}
+                  className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-lg">arrow_drop_down_circle</span> Dropdown
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreFieldTypes((v) => !v)}
+                  className="px-3 py-1.5 rounded-full bg-transparent border border-transparent text-sm text-primary hover:underline transition-colors"
+                >
+                  {showMoreFieldTypes ? 'Less types' : 'More types'}
+                </button>
+              </div>
+
+              {showMoreFieldTypes && (
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => addField('checkbox')}
+                    className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-lg">check_box</span> Checkboxes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addField('number')}
+                    className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-lg">pin</span> Number
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addField('file')}
+                    className="px-3 py-1.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm hover:border-primary hover:text-primary transition-colors shadow-sm flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-lg">attach_file</span> File Upload
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
