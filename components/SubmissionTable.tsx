@@ -306,7 +306,12 @@ export default function SubmissionTable({
         Boolean(data.sort?.field && data.sort?.direction);
 
       if (!hasMeaningfulResult) {
-        setAiError("I couldn't map that request to the current form fields. Try mentioning exact field concepts like year, category, status, CGPA, budget, or date.");
+        const hintLabels = filterDefinitions
+          .filter((definition) => definition.id !== 'submittedAt' && definition.id !== 'studentRoll')
+          .slice(0, 6)
+          .map((definition) => definition.label);
+        const hintText = hintLabels.length ? ` Try mentioning one of these fields: ${hintLabels.join(', ')}.` : '';
+        setAiError(`I couldn't map that request to the available filters.${hintText}`);
         return;
       }
 
@@ -590,22 +595,20 @@ export default function SubmissionTable({
 }
 
 function buildFieldDefinition(field: FormField, submissions: NormalizedSubmission[]): FilterDefinition | null {
-  if (!isRelevantField(field)) {
-    return null;
-  }
+  const label = normalizeKey(field.label);
+  if (field.type === 'textarea' || field.type === 'file' || isLinkLikeField(label)) return null;
 
   const values = submissions
     .map((submission) => getSubmissionFieldValue(submission.payload, field))
     .filter((value) => value !== undefined && value !== null);
 
-  const uniqueTextOptions = Array.from(
-    new Set(
-      values
-        .map((value) => stringifyValue(value))
-        .map((value) => value.trim())
-        .filter(Boolean)
-    )
-  ).slice(0, 20);
+  const stringValues = values
+    .map((value) => stringifyValue(value))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (stringValues.length === 0) return null;
+
+  const uniqueTextOptions = Array.from(new Set(stringValues)).slice(0, 20);
 
   if (isDateField(field)) {
     return {
@@ -640,7 +643,47 @@ function buildFieldDefinition(field: FormField, submissions: NormalizedSubmissio
     };
   }
 
-  if (shouldUseSelectForTextField(field, uniqueTextOptions)) {
+  if (field.type === 'checkbox') {
+    return {
+      id: `field:${field.id}`,
+      label: field.label,
+      kind: 'text',
+      operators: TEXT_FILTER_OPERATORS,
+      options: field.options?.length ? field.options : uniqueTextOptions,
+      getValue: (submission) => getSubmissionFieldValue(submission.payload, field),
+    };
+  }
+
+  const numericCandidates = stringValues.map((value) => toComparableNumber(value)).filter((value) => value !== null);
+  const numericCoverage = numericCandidates.length / stringValues.length;
+  if (numericCandidates.length >= 5 && numericCoverage >= 0.7) {
+    return {
+      id: `field:${field.id}`,
+      label: field.label,
+      kind: 'number',
+      operators: NUMBER_FILTER_OPERATORS,
+      getValue: (submission) => getSubmissionFieldValue(submission.payload, field),
+      sortable: true,
+    };
+  }
+
+  const dateCandidates = stringValues.map((value) => toComparableDate(value)).filter((value) => value !== null);
+  const dateCoverage = dateCandidates.length / stringValues.length;
+  if (dateCandidates.length >= 5 && dateCoverage >= 0.7) {
+    return {
+      id: `field:${field.id}`,
+      label: field.label,
+      kind: 'date',
+      operators: DATE_FILTER_OPERATORS,
+      getValue: (submission) => getSubmissionFieldValue(submission.payload, field),
+      sortable: true,
+    };
+  }
+
+  const uniqueCount = new Set(stringValues).size;
+  const uniqueRatio = uniqueCount / stringValues.length;
+
+  if (uniqueCount > 0 && uniqueCount <= 20 && uniqueRatio <= 0.75) {
     return {
       id: `field:${field.id}`,
       label: field.label,
@@ -649,6 +692,10 @@ function buildFieldDefinition(field: FormField, submissions: NormalizedSubmissio
       options: uniqueTextOptions,
       getValue: (submission) => getSubmissionFieldValue(submission.payload, field),
     };
+  }
+
+  if (stringValues.length >= 10 && uniqueRatio > 0.85 && uniqueCount > 20) {
+    return null;
   }
 
   return {
@@ -660,55 +707,9 @@ function buildFieldDefinition(field: FormField, submissions: NormalizedSubmissio
   };
 }
 
-function isRelevantField(field: FormField) {
-  const label = normalizeKey(field.label);
-
-  if (field.type === 'textarea' || field.type === 'file' || isLinkLikeField(label)) {
-    return false;
-  }
-
-  if (field.type === 'number' || field.type === 'select' || field.type === 'radio') {
-    return true;
-  }
-
-  if (isDateField(field)) {
-    return true;
-  }
-
-  const relevantTextTokens = [
-    'academic year',
-    'year',
-    'class',
-    'specialization',
-    'panel',
-    'category',
-    'status',
-    'type',
-    'meeting',
-    'club',
-    'faculty',
-    'spoc',
-    'prn',
-    'erp',
-    'student name',
-    'name',
-    'email',
-    'contact',
-    'title',
-  ];
-
-  return relevantTextTokens.some((token) => label.includes(token));
-}
-
 function isDateField(field: FormField) {
   const label = normalizeKey(field.label);
   return label.includes('date') || label.includes('dob');
-}
-
-function shouldUseSelectForTextField(field: FormField, options: string[]) {
-  const label = normalizeKey(field.label);
-  const categoricalTokens = ['academic year', 'year', 'class', 'specialization', 'panel', 'category', 'status', 'type'];
-  return options.length > 0 && options.length <= 12 && categoricalTokens.some((token) => label.includes(token));
 }
 
 function isLinkLikeField(label: string) {

@@ -47,7 +47,36 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ...result, meta: { provider, model } })
   } catch (error) {
+    const provider = (process.env.AI_PROVIDER || "openai").toLowerCase()
+    const model =
+      provider === "ollama"
+        ? process.env.OLLAMA_MODEL || "llama3.1:8b-instruct"
+        : process.env.OPENAI_MODEL || "gpt-5-mini"
+
+    const codes: string[] = []
+    const collectCodes = (err: any) => {
+      if (!err || typeof err !== "object") return
+      if (typeof err.code === "string") codes.push(err.code)
+      if (Array.isArray(err.errors)) err.errors.forEach(collectCodes)
+      if (err.cause) collectCodes(err.cause)
+    }
+    collectCodes(error)
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (provider === "ollama" && (codes.includes("ECONNREFUSED") || message.toLowerCase().includes("econnrefused"))) {
+      const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434"
+      console.error("Submission search parse error:", error)
+      return NextResponse.json(
+        {
+          error: "AI provider is unreachable",
+          detail: `Ollama connection refused at ${ollamaBaseUrl}. Start Ollama (or set OLLAMA_BASE_URL), or switch AI_PROVIDER to openai.`,
+          meta: { provider, model, ollamaBaseUrl },
+        },
+        { status: 503 }
+      )
+    }
+
     console.error("Submission search parse error:", error)
-    return NextResponse.json({ error: "Failed to parse search query" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to parse search query", meta: { provider, model } }, { status: 500 })
   }
 }

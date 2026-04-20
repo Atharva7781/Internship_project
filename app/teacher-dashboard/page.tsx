@@ -147,6 +147,13 @@ export default async function TeacherDashboard() {
                           <Link href={`/teacher-dashboard/forms/${form.id}`} className="p-2 text-slate-500 hover:text-primary transition-colors" title="View details">
                             <span className="material-symbols-outlined text-[20px]">visibility</span>
                           </Link>
+                          <Link
+                            href={`/teacher-dashboard/forms/${form.id}/dashboard`}
+                            className="p-2 text-slate-500 hover:text-indigo-600 transition-colors"
+                            title="View analytics"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">analytics</span>
+                          </Link>
                           <Link href={`/forms/${form.id}`} target="_blank" className="p-2 text-slate-500 hover:text-primary transition-colors" title="Open public form">
                             <span className="material-symbols-outlined text-[20px]">open_in_new</span>
                           </Link>

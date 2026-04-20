@@ -1,7 +1,6 @@
 import prisma from "@/lib/prisma"
-import { buildAnalytics } from "@/lib/analytics"
-import ChartRenderer from "@/components/ChartRenderer"
 import DeleteFormButton from "@/components/DeleteFormButton"
+import DynamicAnalytics from "@/components/DynamicAnalytics"
 
 export default async function FormDashboard({
   params,
@@ -23,11 +22,19 @@ export default async function FormDashboard({
     return <div>Form not found</div>
   }
 
-  const analyticsRecord = await prisma.formAnalytics.findUnique({
-    where: { formId },
-  })
-
-  const analytics = (analyticsRecord?.data as any[]) || []
+  const fields = (() => {
+    try {
+      const parsed = JSON.parse(form.fields)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })()
+  const submissionsForClient = submissions.map((s) => ({
+    id: s.id,
+    createdAt: s.createdAt.toISOString(),
+    data: s.data as any,
+  }))
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6 lg:px-8">
@@ -65,8 +72,8 @@ export default async function FormDashboard({
             <p className="mt-1 text-3xl font-bold text-slate-900">{submissions.length}</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-gray-500">Analytics Items</p>
-            <p className="mt-1 text-3xl font-bold text-slate-900">{analytics.length}</p>
+            <p className="text-sm font-medium text-gray-500">Fields</p>
+            <p className="mt-1 text-3xl font-bold text-slate-900">{fields.length}</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-gray-500">Status</p>
@@ -82,23 +89,17 @@ export default async function FormDashboard({
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Analytics</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Visual breakdown of submission data collected for this form.
+              Auto-generated insights and charts based on this form&apos;s schema and submissions.
             </p>
           </div>
         </div>
 
-        {analytics.length === 0 ? (
+        {submissions.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
             No responses yet. Analytics will appear after the first submission.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {analytics.map((chart: any, index: number) => (
-              <div key={index} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <ChartRenderer chart={chart} />
-              </div>
-            ))}
-          </div>
+          <DynamicAnalytics fields={fields} submissions={submissionsForClient} />
         )}
       </section>
     </div>

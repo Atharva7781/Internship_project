@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import SignOutButton from './SignOutButton';
 
@@ -13,6 +14,13 @@ interface TeacherSidebarProps {
 
 export default function TeacherSidebar({ user }: TeacherSidebarProps) {
   const pathname = usePathname();
+  const analyticsHref = useMemo(() => {
+    const match = pathname.match(/^\/teacher-dashboard\/forms\/([^/]+)/);
+    if (match?.[1]) {
+      return `/teacher-dashboard/forms/${match[1]}/dashboard`;
+    }
+    return '/teacher-dashboard/history';
+  }, [pathname]);
 
   const isActive = (path: string) => {
     if (path === '/teacher-dashboard' && pathname === '/teacher-dashboard') {
@@ -42,7 +50,7 @@ export default function TeacherSidebar({ user }: TeacherSidebarProps) {
     },
     {
       name: 'Analytics',
-      href: '#',
+      href: analyticsHref,
       icon: 'analytics',
     },
   ];
@@ -64,7 +72,7 @@ export default function TeacherSidebar({ user }: TeacherSidebarProps) {
           const active = isActive(item.href);
           return (
             <Link
-              key={item.href}
+              key={`${item.name}-${item.href}`}
               href={item.href}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 active

@@ -1,5 +1,13 @@
 
-import { FormField } from '@/app/actions';
+export type FieldType = 'text' | 'number' | 'checkbox' | 'radio' | 'select' | 'textarea' | 'file';
+
+export interface FormField {
+  id: string;
+  label: string;
+  type: FieldType;
+  required: boolean;
+  options?: string[];
+}
 
 export interface FormTemplate {
   id: string;
