@@ -150,5 +150,94 @@ export const FORM_TEMPLATES: FormTemplate[] = [
       { id: '11', label: 'Startup Website Link', type: 'text', required: false },
       { id: '12', label: 'SPOC Faculty/Student Name', type: 'text', required: true },
     ]
+  },
+  {
+    id: 'internship-details',
+    title: 'Internship Details Data Collection',
+    description: 'Collect internship details from students.',
+    fields: [
+      { id: '1', label: 'PRN', type: 'text', required: true },
+      { id: '2', label: 'Name', type: 'text', required: true },
+      { id: '3', label: 'Batch', type: 'text', required: true },
+      { id: '4', label: 'Specialisation', type: 'text', required: true },
+      { id: '5', label: 'Semester', type: 'select', required: true, options: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+      { id: '6', label: 'Company/Organization', type: 'text', required: true },
+      { id: '7', label: 'Role/Domain', type: 'text', required: true },
+      { id: '8', label: 'Internship Mode', type: 'select', required: true, options: ['On-site', 'Remote', 'Hybrid'] },
+      { id: '9', label: 'Start Date', type: 'text', required: true },
+      { id: '10', label: 'End Date', type: 'text', required: true },
+      { id: '11', label: 'Duration (weeks)', type: 'number', required: false },
+      { id: '12', label: 'Stipend (if any)', type: 'text', required: false },
+      { id: '13', label: 'Internship Completion Certificate/Offer Letter', type: 'file', required: false },
+    ]
+  },
+  {
+    id: 'placement-details',
+    title: 'Placement Details Data Collection',
+    description: 'Collect placement details from students.',
+    fields: [
+      { id: '1', label: 'PRN', type: 'text', required: true },
+      { id: '2', label: 'Name', type: 'text', required: true },
+      { id: '3', label: 'Batch', type: 'text', required: true },
+      { id: '4', label: 'Specialisation', type: 'text', required: true },
+      { id: '5', label: 'Semester', type: 'select', required: true, options: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+      { id: '6', label: 'Company/Organization', type: 'text', required: true },
+      { id: '7', label: 'Job Role', type: 'text', required: true },
+      { id: '8', label: 'Placement Type', type: 'select', required: true, options: ['On-campus', 'Off-campus'] },
+      { id: '9', label: 'Package/CTC', type: 'text', required: false },
+      { id: '10', label: 'Offer Date', type: 'text', required: false },
+      { id: '11', label: 'Offer Letter', type: 'file', required: false },
+    ]
+  },
+  {
+    id: 'capstone-project',
+    title: 'Capstone Project Data Collection',
+    description: 'Collect capstone project details and uploads.',
+    fields: [
+      { id: '1', label: 'PRN', type: 'text', required: true },
+      { id: '2', label: 'Name', type: 'text', required: true },
+      { id: '3', label: 'Batch', type: 'text', required: true },
+      { id: '4', label: 'Specialisation', type: 'text', required: true },
+      { id: '5', label: 'Semester', type: 'select', required: true, options: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+      { id: '6', label: 'Project Title', type: 'text', required: true },
+      { id: '7', label: 'Paper Published', type: 'select', required: true, options: ['Yes', 'No'] },
+      { id: '8', label: 'Keywords', type: 'textarea', required: true },
+      { id: '9', label: 'Abstract', type: 'textarea', required: true },
+      { id: '10', label: 'Upload Project Report', type: 'file', required: true },
+      { id: '11', label: 'Upload Project PPT', type: 'file', required: true },
+    ]
+  },
+  {
+    id: 'seminar-data',
+    title: 'Seminar Data Collection',
+    description: 'Collect seminar details and uploads.',
+    fields: [
+      { id: '1', label: 'PRN', type: 'text', required: true },
+      { id: '2', label: 'Name', type: 'text', required: true },
+      { id: '3', label: 'Batch', type: 'text', required: true },
+      { id: '4', label: 'Specialisation', type: 'text', required: true },
+      { id: '5', label: 'Semester', type: 'select', required: true, options: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+      { id: '6', label: 'Title', type: 'text', required: true },
+      { id: '7', label: 'Paper Published', type: 'select', required: true, options: ['Yes', 'No'] },
+      { id: '8', label: 'Keywords', type: 'textarea', required: true },
+      { id: '9', label: 'Abstract', type: 'textarea', required: true },
+      { id: '10', label: 'Upload Report', type: 'file', required: true },
+      { id: '11', label: 'Upload PPT', type: 'file', required: true },
+    ]
+  },
+  {
+    id: 'gate-competitive-exams',
+    title: 'GATE & Competitive Exam Data Collection',
+    description: 'Collect competitive exam details and scorecard uploads.',
+    fields: [
+      { id: '1', label: 'PRN', type: 'text', required: true },
+      { id: '2', label: 'Name', type: 'text', required: true },
+      { id: '3', label: 'Batch', type: 'text', required: true },
+      { id: '4', label: 'Specialisation', type: 'text', required: true },
+      { id: '5', label: 'Semester', type: 'select', required: true, options: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+      { id: '6', label: 'Exam Name', type: 'text', required: true },
+      { id: '7', label: 'Score', type: 'text', required: true },
+      { id: '8', label: 'Upload Scorecard', type: 'file', required: true },
+    ]
   }
 ];

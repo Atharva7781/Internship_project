@@ -23,10 +23,10 @@ export default function FormStatusToggle({ formId, initialStatus }: { formId: st
     <button
       onClick={handleToggle}
       disabled={loading}
-      className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors flex items-center gap-2 ${
-        isActive 
-          ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400' 
-          : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
+      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border shadow-sm transition-colors focus-visible:outline-none disabled:opacity-60 disabled:cursor-not-allowed ${
+        isActive
+          ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-200"
+          : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 focus-visible:ring-2 focus-visible:ring-emerald-200"
       }`}
     >
       {loading ? (

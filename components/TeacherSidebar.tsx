@@ -53,9 +53,9 @@ export default function TeacherSidebar({ user }: TeacherSidebarProps) {
         <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white">
           <span className="material-symbols-outlined">school</span>
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="font-bold text-slate-900 dark:text-white leading-tight">College Admin</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Academic Portal v2.0</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">Academic Portal v2.0</p>
         </div>
       </div>
       

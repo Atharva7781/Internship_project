@@ -20,13 +20,13 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   return (
     <div className="max-w-6xl mx-auto">
         <header className="mb-8">
-          <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+          <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm mb-2">
             <Link href="/teacher-dashboard" className="hover:text-primary transition-colors">Dashboard</Link>
             <span className="material-symbols-outlined text-[16px]">chevron_right</span>
             <span className="text-slate-900 dark:text-slate-100 font-medium">History</span>
           </div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Form History</h1>
-          <p className="text-slate-500 dark:text-slate-400">View and manage all your previous forms.</p>
+          <p className="text-slate-600 dark:text-slate-400">View and manage all your previous forms.</p>
         </header>
 
         <HistoryFilters />
@@ -55,7 +55,7 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
                     <tr key={form.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-6 py-4">
                         <p className="font-semibold text-slate-900 dark:text-white">{form.title}</p>
-                        <p className="text-xs text-slate-500 truncate max-w-xs">{form.description}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 truncate max-w-xs">{form.description}</p>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
                         {new Date(form.createdAt).toLocaleDateString()}
