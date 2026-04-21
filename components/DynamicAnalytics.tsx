@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import {
   ResponsiveContainer,
   BarChart,
@@ -9,243 +9,99 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
   LineChart,
   Line,
   ScatterChart,
   Scatter,
   ZAxis,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts"
-
-type Field = {
-  id: string
-  label: string
-  type?: string
-  options?: string[]
-  required?: boolean
-}
-
-type Submission = {
-  id?: string
-  createdAt?: string | null
-  data: Record<string, unknown>
-}
-
-type FieldKind = "numeric" | "categorical" | "date" | "text"
+import { buildAnalytics, type Field, type Submission, type AnalyticsChart } from "@/lib/analytics"
 
 const BAR_COLOR = "#4f46e5"
-const PIE_COLORS = ["#4f46e5", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6"]
+const PIE_COLORS = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"]
 
-const IDENTIFIER_LABEL_PARTS = [
-  "prn",
-  "name",
-  "email",
-  "contact",
-  "phone",
-  "mobile",
-  "roll",
-  "erp",
-  "id",
-  "link",
-  "url",
-  "website",
-  "upload",
-  "file",
-  "document",
-  "proof",
-  "evidence",
-]
+type DrilldownFilter = {
+  chartId: string
+  chartType: AnalyticsChart["type"]
+  label: string
+  payload: Record<string, unknown>
+  seriesKey?: string
+}
 
-function normalizeText(value: unknown) {
-  return String(value).trim().replace(/\s+/g, " ")
+function normalize(value: unknown) {
+  return String(value ?? "").trim().toLowerCase()
 }
 
 function parseNumberLike(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value
-  if (typeof value !== "string") return null
-  const cleaned = value.replace(/,/g, "")
-  const match = cleaned.match(/-?\d+(\.\d+)?/)
+  const text = String(value ?? "").replace(/,/g, "")
+  const match = text.match(/-?\d+(\.\d+)?/)
   if (!match) return null
   const parsed = Number(match[0])
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function parseDateLike(value: unknown): Date | null {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value
-  if (typeof value !== "string") return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed
+function parseBucketRange(bucket: string) {
+  const match = bucket.match(/(-?\d+(\.\d+)?)\s*-\s*(-?\d+(\.\d+)?)/)
+  if (!match) return null
+  const min = Number(match[1])
+  const max = Number(match[3])
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null
+  return { min, max }
 }
 
-function median(values: number[]) {
-  if (values.length === 0) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+function toBooleanLike(value: unknown): boolean | null {
+  const v = normalize(value)
+  if (!v) return null
+  if (["yes", "true", "placed", "recommended", "published", "active", "1"].some((x) => v === x || v.includes(x))) return true
+  if (["no", "false", "not", "unplaced", "inactive", "0"].some((x) => v === x || v.includes(x))) return false
+  return null
 }
 
-function quantile(values: number[], q: number) {
-  if (values.length === 0) return null
-  const sorted = [...values].sort((a, b) => a - b)
-  const pos = (sorted.length - 1) * q
-  const base = Math.floor(pos)
-  const rest = pos - base
-  if (sorted[base + 1] === undefined) return sorted[base]
-  return sorted[base] + rest * (sorted[base + 1] - sorted[base])
+function matchesCategorySelection(source: unknown, selected: string) {
+  const sourceNorm = normalize(source)
+  const selectedNorm = normalize(selected)
+  if (!selectedNorm) return false
+  if (sourceNorm === selectedNorm) return true
+  if (sourceNorm && (sourceNorm.includes(selectedNorm) || selectedNorm.includes(sourceNorm))) return true
+  const sourceBool = toBooleanLike(source)
+  const selectedBool = toBooleanLike(selectedNorm)
+  if (sourceBool !== null && selectedBool !== null) return sourceBool === selectedBool
+  if (selectedNorm.includes("published")) return sourceBool === !selectedNorm.includes("not")
+  if (selectedNorm.includes("recommended")) return sourceBool === !selectedNorm.includes("not")
+  if (selectedNorm.includes("placed")) return sourceBool === !selectedNorm.includes("not")
+  return false
 }
 
-function formatBinLabel(start: number, end: number) {
-  return `${start.toFixed(1)} - ${end.toFixed(1)}`
-}
-
-function buildHistogram(numbers: number[]): Record<string, number> {
-  if (numbers.length === 0) return {}
-  const minValue = Math.min(...numbers)
-  const maxValue = Math.max(...numbers)
-
-  if (minValue === maxValue) {
-    return { [String(minValue)]: numbers.length }
-  }
-
-  const binCount = Math.max(4, Math.min(10, Math.round(Math.sqrt(numbers.length))))
-  const range = maxValue - minValue
-  const step = range / binCount
-  const bins: { start: number; end: number; count: number }[] = []
-
-  for (let i = 0; i < binCount; i++) {
-    const start = minValue + i * step
-    const end = i === binCount - 1 ? maxValue : minValue + (i + 1) * step
-    bins.push({ start, end, count: 0 })
-  }
-
-  numbers.forEach((num) => {
-    let idx = Math.floor((num - minValue) / step)
-    if (idx >= bins.length) idx = bins.length - 1
-    if (idx < 0) idx = 0
-    bins[idx].count += 1
-  })
-
-  const result: Record<string, number> = {}
-  bins.forEach((bin) => {
-    result[formatBinLabel(bin.start, bin.end)] = bin.count
-  })
-  return result
-}
-
-function isIdentifierLikeField(field: Field) {
-  const label = (field.label || "").toLowerCase()
-  return IDENTIFIER_LABEL_PARTS.some((part) => label.includes(part))
-}
-
-function inferKind(field: Field, rawValues: unknown[]): FieldKind {
-  const type = (field.type || "").toLowerCase()
-  if (type === "number" || type === "rating") return "numeric"
-  if (type === "date") return "date"
-  if (type === "select" || type === "radio" || type === "checkbox") return "categorical"
-  if (type === "text" || type === "textarea") {
-    const normalized = rawValues.map((v) => normalizeText(v)).filter((v) => v !== "")
-    if (normalized.length === 0) return "text"
-
-    const parsedNumbers = normalized.map((v) => parseNumberLike(v)).filter((v): v is number => v !== null)
-    const numericCoverage = parsedNumbers.length / normalized.length
-    if (parsedNumbers.length >= 5 && numericCoverage >= 0.75) return "numeric"
-
-    const parsedDates = normalized.map((v) => parseDateLike(v)).filter((v): v is Date => v !== null)
-    const dateCoverage = parsedDates.length / normalized.length
-    if (parsedDates.length >= 5 && dateCoverage >= 0.75) return "date"
-
-    const uniqueCount = new Set(normalized).size
-    const uniqueRatio = uniqueCount / normalized.length
-    if (uniqueCount <= 12 && uniqueRatio <= 0.65) return "categorical"
-
-    return "text"
-  }
-
-  if (field.options && field.options.length > 0) return "categorical"
-
-  const normalized = rawValues.map((v) => normalizeText(v)).filter((v) => v !== "")
-  if (normalized.length === 0) return "text"
-
-  const parsedNumbers = normalized.map((v) => parseNumberLike(v)).filter((v): v is number => v !== null)
-  if (parsedNumbers.length >= Math.max(5, Math.round(0.8 * normalized.length))) return "numeric"
-
-  const parsedDates = normalized.map((v) => parseDateLike(v)).filter((v): v is Date => v !== null)
-  if (parsedDates.length >= Math.max(5, Math.round(0.8 * normalized.length))) return "date"
-
-  const uniqueCount = new Set(normalized).size
-  const uniqueRatio = uniqueCount / normalized.length
-  if (uniqueCount <= 12 && uniqueRatio <= 0.65) return "categorical"
-
-  return "text"
-}
-
-function buildCountMap(values: string[]) {
-  const counts: Record<string, number> = {}
-  values.forEach((value) => {
-    counts[value] = (counts[value] || 0) + 1
-  })
-  return counts
-}
-
-function sortCountMap(counts: Record<string, number>, preferredOrder?: string[]) {
-  const entries = Object.entries(counts)
-  const orderIndex = new Map((preferredOrder || []).map((value, index) => [value, index]))
-  entries.sort((a, b) => {
-    const ai = orderIndex.has(a[0]) ? (orderIndex.get(a[0]) as number) : Number.POSITIVE_INFINITY
-    const bi = orderIndex.has(b[0]) ? (orderIndex.get(b[0]) as number) : Number.POSITIVE_INFINITY
-    if (ai !== bi) return ai - bi
-    return b[1] - a[1]
-  })
-  return Object.fromEntries(entries)
-}
-
-function formatPercent(part: number, total: number) {
-  if (!total) return "0%"
-  return `${Math.round((part / total) * 100)}%`
-}
-
-function dayKey(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
-function weekKey(date: Date) {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-  const day = d.getUTCDay()
-  const diff = (day === 0 ? -6 : 1) - day
-  d.setUTCDate(d.getUTCDate() + diff)
-  return d.toISOString().slice(0, 10)
-}
-
-function pearsonCorrelation(x: number[], y: number[]) {
-  if (x.length !== y.length || x.length < 3) return null
-  const n = x.length
-  const meanX = x.reduce((a, b) => a + b, 0) / n
-  const meanY = y.reduce((a, b) => a + b, 0) / n
-  let num = 0
-  let denX = 0
-  let denY = 0
-  for (let i = 0; i < n; i++) {
-    const dx = x[i] - meanX
-    const dy = y[i] - meanY
-    num += dx * dy
-    denX += dx * dx
-    denY += dy * dy
-  }
-  const den = Math.sqrt(denX * denY)
-  if (!den) return null
-  return num / den
-}
-
-function InsightPill({ text }: { text: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-      {text}
-    </span>
-  )
+function inferFieldId(fields: Field[], chart: AnalyticsChart, preferred?: string[]) {
+  const keys = [...(preferred || []), chart.xKey || "", chart.yKey || "", chart.title]
+    .join(" ")
+    .toLowerCase()
+  const find = (tokens: string[]) => fields.find((f) => tokens.some((t) => f.label.toLowerCase().includes(t)))?.id
+  if (keys.includes("package") || keys.includes("ctc") || keys.includes("salary")) return find(["package", "ctc", "salary"])
+  if (keys.includes("stipend")) return find(["stipend"])
+  if (keys.includes("cgpa")) return find(["cgpa", "gpa"])
+  if (keys.includes("difficulty")) return find(["difficulty"])
+  if (keys.includes("workload")) return find(["workload"])
+  if (keys.includes("attendance")) return find(["attendance"])
+  if (keys.includes("revenue")) return find(["revenue"])
+  if (keys.includes("budget")) return find(["budget"])
+  if (keys.includes("duration")) return find(["duration"])
+  if (keys.includes("company")) return find(["company", "organization"])
+  if (keys.includes("role")) return find(["role", "domain"])
+  if (keys.includes("specialisation") || keys.includes("specialization")) return find(["specialisation", "specialization"])
+  if (keys.includes("category")) return find(["category"])
+  if (keys.includes("year")) return find(["year", "academic year"])
+  if (keys.includes("batch")) return find(["batch"])
+  if (keys.includes("semester")) return find(["semester"])
+  if (keys.includes("type")) return find(["type", "placement type", "achievement type"])
+  if (keys.includes("status")) return find(["status", "placement status"])
+  if (keys.includes("published")) return find(["paper published", "published"])
+  return undefined
 }
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -259,7 +115,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 
 function CardShell({ title, meta, children }: { title: string; meta?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-col gap-1">
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-base font-semibold text-slate-900">{title}</h3>
@@ -271,43 +127,150 @@ function CardShell({ title, meta, children }: { title: string; meta?: string; ch
   )
 }
 
-function BarOrPie({ title, insight, counts, total, preferPie }: { title: string; insight?: string; counts: Record<string, number>; total: number; preferPie: boolean }) {
-  const data = Object.entries(counts).map(([name, value]) => ({ name, value }))
-  const usePie = preferPie && data.length <= 6
+function BoxPlotCard({
+  chart,
+  activeFilter,
+  onSelect,
+}: {
+  chart: Extract<AnalyticsChart, { type: "box" }>
+  activeFilter: DrilldownFilter | null
+  onSelect: (filter: DrilldownFilter) => void
+}) {
+  if (!chart.stats) return null
+  const { min, q1, median, q3, max, count } = chart.stats
+  const span = max - min || 1
+  const left = ((q1 - min) / span) * 100
+  const width = ((q3 - q1) / span) * 100
+  const medianPos = ((median - min) / span) * 100
+  const segmentDefs = [
+    { id: "low", label: `Lower (Min-Q1)`, min, max: q1 },
+    { id: "mid", label: `Middle (Q1-Q3)`, min: q1, max: q3 },
+    { id: "high", label: `Upper (Q3-Max)`, min: q3, max },
+  ]
+
   return (
-    <CardShell title={title} meta={`${total} responses`}>
-      <div className="mb-3 flex flex-wrap gap-2">
-        {insight ? <InsightPill text={insight} /> : null}
-        <InsightPill text={usePie ? "Pie chart" : "Bar chart"} />
-      </div>
-      <div className="h-[280px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          {usePie ? (
-            <PieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                outerRadius={95}
-                dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+    <CardShell title={chart.title} meta={`${count} responses`}>
+      <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="relative h-10">
+          <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-slate-300" />
+          <div
+            className="absolute top-1/2 h-6 -translate-y-1/2 rounded bg-indigo-200"
+            style={{ left: `${left}%`, width: `${Math.max(width, 2)}%` }}
+          />
+          <div className="absolute top-1/2 h-7 w-[2px] -translate-y-1/2 bg-indigo-700" style={{ left: `${medianPos}%` }} />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Min: {min.toFixed(2)}</span>
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Q1: {q1.toFixed(2)}</span>
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Median: {median.toFixed(2)}</span>
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Q3: {q3.toFixed(2)}</span>
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1">Max: {max.toFixed(2)}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {segmentDefs.map((segment) => {
+            const selected =
+              activeFilter?.chartId === chart.id &&
+              String(activeFilter.payload.segmentId ?? "") === segment.id
+            return (
+              <button
+                key={segment.id}
+                type="button"
+                onClick={() =>
+                  onSelect({
+                    chartId: chart.id,
+                    chartType: chart.type,
+                    label: `${chart.title}: ${segment.label} (${segment.min.toFixed(2)}-${segment.max.toFixed(2)})`,
+                    payload: {
+                      segmentId: segment.id,
+                      min: segment.min,
+                      max: segment.max,
+                    },
+                  })
+                }
+                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                  selected
+                    ? "bg-indigo-700 text-white"
+                    : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-50"
+                }`}
               >
-                {data.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend verticalAlign="bottom" height={36} />
-            </PieChart>
-          ) : (
+                {segment.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </CardShell>
+  )
+}
+
+function BarOrLineCard({
+  chart,
+  activeFilter,
+  onSelect,
+}: {
+  chart: Extract<AnalyticsChart, { type: "bar" | "line" | "histogram" }>
+  activeFilter: DrilldownFilter | null
+  onSelect: (filter: DrilldownFilter) => void
+}) {
+  const data = chart.data || []
+  const xKey = chart.xKey
+  const yKey = chart.yKey
+
+  return (
+    <CardShell title={chart.title}>
+      <div className="h-[280px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          {chart.type === "bar" || chart.type === "histogram" ? (
             <BarChart data={data} margin={{ top: 8, right: 24, left: 8, bottom: 64 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" angle={-20} textAnchor="end" interval={0} height={72} />
-              <YAxis allowDecimals={false} />
+              <XAxis dataKey={xKey} angle={-20} textAnchor="end" interval={0} height={72} />
+              <YAxis />
               <Tooltip />
-              <Bar dataKey="value" fill={BAR_COLOR} radius={[6, 6, 0, 0]} />
+              <Bar dataKey={yKey} radius={[6, 6, 0, 0]}>
+                {data.map((entry, idx) => {
+                  const selected =
+                    activeFilter?.chartId === chart.id &&
+                    String(activeFilter.payload[xKey || ""] ?? "") === String(entry[xKey || ""] ?? "")
+                  return (
+                    <Cell
+                      key={`${chart.id}-bar-${idx}`}
+                      fill={selected ? "#1d4ed8" : BAR_COLOR}
+                      cursor="pointer"
+                      onClick={() =>
+                        onSelect({
+                          chartId: chart.id,
+                          chartType: chart.type,
+                          label: `${chart.title}: ${String(entry[xKey || ""] ?? "")}`,
+                          payload: entry as Record<string, unknown>,
+                        })
+                      }
+                    />
+                  )
+                })}
+              </Bar>
             </BarChart>
+          ) : (
+            <LineChart
+              data={data}
+              margin={{ top: 8, right: 24, left: 8, bottom: 32 }}
+              onClick={(state: unknown) => {
+                const s = state as { activePayload?: Array<{ payload?: Record<string, unknown> }> } | undefined
+                const payload = s?.activePayload?.[0]?.payload
+                if (!payload) return
+                onSelect({
+                  chartId: chart.id,
+                  chartType: chart.type,
+                  label: `${chart.title}: ${String(payload[xKey || ""] ?? "")}`,
+                  payload,
+                })
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xKey} />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey={yKey} stroke={BAR_COLOR} strokeWidth={2} activeDot={{ r: 6, style: { cursor: "pointer" } }} />
+            </LineChart>
           )}
         </ResponsiveContainer>
       </div>
@@ -315,265 +278,35 @@ function BarOrPie({ title, insight, counts, total, preferPie }: { title: string;
   )
 }
 
-function NumericCard({
-  title,
-  numbers,
-  totalSubmissions,
-  points,
-  xMode,
+function ScatterCard({
+  chart,
+  onSelect,
 }: {
-  title: string
-  numbers: number[]
-  totalSubmissions: number
-  points: { x: number; y: number }[]
-  xMode: "time" | "index"
+  chart: Extract<AnalyticsChart, { type: "scatter" }>
+  onSelect: (filter: DrilldownFilter) => void
 }) {
-  const avg = numbers.reduce((a, b) => a + b, 0) / numbers.length
-  const minValue = Math.min(...numbers)
-  const maxValue = Math.max(...numbers)
-  const med = median(numbers) ?? avg
-  const q1 = quantile(numbers, 0.25) ?? med
-  const q3 = quantile(numbers, 0.75) ?? med
-  const iqr = q3 - q1
-  const span = maxValue - minValue || 1
-  const concentration = iqr / span
-  const insight = concentration <= 0.35 ? "Values are concentrated in a narrower range." : "Values are spread across a wider range."
-  const histogram = buildHistogram(numbers)
-
-  const histData = Object.entries(histogram).map(([name, value]) => ({ name, value }))
-  const scatterData = points.length > 450 ? points.slice(0, 450) : points
-  const xLabel = xMode === "time" ? "Date" : "Response #"
-  const xTickFormatter = (v: any) => (xMode === "time" ? new Date(Number(v)).toLocaleDateString() : String(v))
-
   return (
-    <CardShell title={title} meta={`${numbers.length}/${totalSubmissions} responses`}>
-      <div className="mb-4 flex flex-wrap gap-2">
-        <InsightPill text={`Average: ${avg.toFixed(2)}`} />
-        <InsightPill text={`Median: ${med.toFixed(2)}`} />
-        <InsightPill text={`Min–Max: ${minValue.toFixed(2)}–${maxValue.toFixed(2)}`} />
-        <InsightPill text={`Q1–Q3: ${q1.toFixed(2)}–${q3.toFixed(2)}`} />
-        <InsightPill text={insight} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 p-4">
-          <p className="text-sm font-semibold text-slate-800">Distribution (Histogram)</p>
-          <div className="mt-3 h-[220px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={histData} margin={{ top: 8, right: 16, left: 0, bottom: 72 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-20} textAnchor="end" interval={0} height={72} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="value" fill={BAR_COLOR} radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 p-4">
-          <p className="text-sm font-semibold text-slate-800">Scatter Plot</p>
-          <p className="mt-1 text-xs text-slate-500">{xMode === "time" ? "Value over time" : "Value across responses"}</p>
-          <div className="mt-3 h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 36 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  dataKey="x"
-                  name={xLabel}
-                  tickFormatter={xTickFormatter}
-                  domain={["dataMin", "dataMax"]}
-                />
-                <YAxis type="number" dataKey="y" name={title} domain={["auto", "auto"]} />
-                <ZAxis range={[48, 48]} />
-                <Tooltip labelFormatter={(v) => `${xLabel}: ${xTickFormatter(v)}`} formatter={(v: any) => [Number(v).toFixed(2), title]} />
-                <Scatter data={scatterData} fill={BAR_COLOR} />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-          {points.length > 450 ? (
-            <p className="mt-2 text-xs text-slate-500">Showing first 450 points for readability.</p>
-          ) : null}
-        </div>
-      </div>
-    </CardShell>
-  )
-}
-
-function DateTrendCard({ title, dates, totalSubmissions }: { title: string; dates: Date[]; totalSubmissions: number }) {
-  const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime())
-  const earliest = sorted[0]
-  const latest = sorted[sorted.length - 1]
-  const spanDays = Math.max(1, Math.round((latest.getTime() - earliest.getTime()) / (24 * 60 * 60 * 1000)))
-  const keyFn = spanDays > 60 ? weekKey : dayKey
-
-  const counts: Record<string, number> = {}
-  sorted.forEach((d) => {
-    const k = keyFn(d)
-    counts[k] = (counts[k] || 0) + 1
-  })
-  const series = Object.entries(counts)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, value]) => ({ date, value }))
-
-  const peak = series.reduce((acc, cur) => (cur.value > acc.value ? cur : acc), series[0])
-
-  const y = series.map((p) => p.value)
-  const x = series.map((_, idx) => idx)
-  const slope = (() => {
-    if (x.length < 3) return 0
-    const n = x.length
-    const meanX = x.reduce((a, b) => a + b, 0) / n
-    const meanY = y.reduce((a, b) => a + b, 0) / n
-    let num = 0
-    let den = 0
-    for (let i = 0; i < n; i++) {
-      const dx = x[i] - meanX
-      num += dx * (y[i] - meanY)
-      den += dx * dx
-    }
-    return den ? num / den : 0
-  })()
-  const trend = slope > 0.05 ? "Response activity increased over time." : slope < -0.05 ? "Response activity decreased over time." : "Response activity stayed fairly steady."
-
-  return (
-    <CardShell title={title} meta={`${dates.length}/${totalSubmissions} responses`}>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <InsightPill text={`Earliest: ${earliest.toLocaleDateString()}`} />
-        <InsightPill text={`Latest: ${latest.toLocaleDateString()}`} />
-        <InsightPill text={`Peak: ${peak.date} (${peak.value})`} />
-        <InsightPill text={trend} />
-      </div>
-      <div className="h-[280px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={series} margin={{ top: 8, right: 24, left: 8, bottom: 32 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" interval="preserveStartEnd" />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Line type="monotone" dataKey="value" stroke={BAR_COLOR} strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </CardShell>
-  )
-}
-
-function KeywordsCard({ title, texts, totalSubmissions }: { title: string; texts: string[]; totalSubmissions: number }) {
-  const stopwords = new Set([
-    "the",
-    "and",
-    "for",
-    "with",
-    "that",
-    "this",
-    "from",
-    "have",
-    "has",
-    "had",
-    "are",
-    "was",
-    "were",
-    "you",
-    "your",
-    "not",
-    "but",
-    "can",
-    "could",
-    "should",
-    "would",
-    "will",
-    "into",
-    "about",
-    "there",
-    "their",
-    "they",
-    "them",
-    "its",
-    "our",
-    "what",
-    "when",
-    "where",
-    "which",
-    "why",
-    "how",
-  ])
-  const counts: Record<string, number> = {}
-  texts.forEach((t) => {
-    const cleaned = t.toLowerCase().replace(/[^a-z0-9\s]/g, " ")
-    cleaned
-      .split(/\s+/g)
-      .map((w) => w.trim())
-      .filter((w) => w.length >= 3 && !stopwords.has(w))
-      .forEach((w) => {
-        counts[w] = (counts[w] || 0) + 1
-      })
-  })
-
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10)
-  const data = entries.map(([name, value]) => ({ name, value }))
-  if (data.length === 0) return null
-
-  const top = data[0]
-  return (
-    <CardShell title={title} meta={`${texts.length}/${totalSubmissions} responses`}>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <InsightPill text={`Common keyword: "${top.name}" (${formatPercent(top.value, texts.length)})`} />
-        <InsightPill text="Extracted keywords (no raw text shown)" />
-      </div>
-      <div className="h-[260px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 24, left: 8, bottom: 64 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" angle={-20} textAnchor="end" interval={0} height={72} />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
-            <Bar dataKey="value" fill={BAR_COLOR} radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </CardShell>
-  )
-}
-
-function RelationshipCard({
-  title,
-  xLabel,
-  yLabel,
-  points,
-  correlation,
-}: {
-  title: string
-  xLabel: string
-  yLabel: string
-  points: { x: number; y: number }[]
-  correlation: number | null
-}) {
-  const insight =
-    correlation === null
-      ? "Not enough paired responses to infer a relationship."
-      : Math.abs(correlation) < 0.2
-        ? "No strong relationship detected."
-        : correlation > 0
-          ? `Positive relationship (r=${correlation.toFixed(2)}).`
-          : `Negative relationship (r=${correlation.toFixed(2)}).`
-
-  return (
-    <CardShell title={title} meta={`${points.length} paired responses`}>
-      <div className="mb-3 flex flex-wrap gap-2">
-        <InsightPill text={insight} />
-        <InsightPill text="Scatter plot" />
-      </div>
-      <div className="h-[320px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+    <CardShell title={chart.title}>
+      <div className="h-[320px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <ScatterChart margin={{ top: 8, right: 24, left: 8, bottom: 36 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="x" name={xLabel} />
-            <YAxis dataKey="y" name={yLabel} />
-            <ZAxis range={[60, 60]} />
-            <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-            <Scatter data={points} fill={BAR_COLOR} />
+            <XAxis type="number" dataKey={chart.xKey} name={chart.xKey} />
+            <YAxis type="number" dataKey={chart.yKey} name={chart.yKey} />
+            <ZAxis range={[48, 48]} />
+            <Tooltip />
+            <Scatter
+              data={chart.data || []}
+              fill={BAR_COLOR}
+              onClick={(point: Record<string, unknown>) =>
+                onSelect({
+                  chartId: chart.id,
+                  chartType: chart.type,
+                  label: `${chart.title}: (${String(point[chart.xKey || "x"])}, ${String(point[chart.yKey || "y"])})`,
+                  payload: point,
+                })
+              }
+            />
           </ScatterChart>
         </ResponsiveContainer>
       </div>
@@ -581,279 +314,550 @@ function RelationshipCard({
   )
 }
 
-export default function DynamicAnalytics({ fields, submissions }: { fields: Field[]; submissions: Submission[] }) {
-  const computed = useMemo(() => {
-    const totalSubmissions = submissions.length
+function PieCard({
+  chart,
+  activeFilter,
+  onSelect,
+}: {
+  chart: Extract<AnalyticsChart, { type: "pie" }>
+  activeFilter: DrilldownFilter | null
+  onSelect: (filter: DrilldownFilter) => void
+}) {
+  const data = chart.data || []
+  return (
+    <CardShell title={chart.title}>
+      <div className="h-[300px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <PieChart>
+            <Pie data={data} dataKey={chart.yKey || "value"} nameKey={chart.xKey || "label"} outerRadius={95} label>
+              {data.map((entry, idx) => {
+                const key = chart.xKey || "label"
+                const selected =
+                  activeFilter?.chartId === chart.id &&
+                  String(activeFilter.payload[key] ?? "") === String(entry[key] ?? "")
+                return (
+                  <Cell
+                    key={idx}
+                    fill={selected ? "#1d4ed8" : PIE_COLORS[idx % PIE_COLORS.length]}
+                    cursor="pointer"
+                    onClick={() =>
+                      onSelect({
+                        chartId: chart.id,
+                        chartType: chart.type,
+                        label: `${chart.title}: ${String(entry[key] ?? "")}`,
+                        payload: entry as Record<string, unknown>,
+                      })
+                    }
+                  />
+                )
+              })}
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </CardShell>
+  )
+}
 
-    const submissionDates = submissions
-      .map((s) => (s.createdAt ? parseDateLike(s.createdAt) : null))
-      .filter((d): d is Date => d !== null)
+function StackedBarCard({
+  chart,
+  activeFilter,
+  onSelect,
+}: {
+  chart: Extract<AnalyticsChart, { type: "stackedBar" }>
+  activeFilter: DrilldownFilter | null
+  onSelect: (filter: DrilldownFilter) => void
+}) {
+  const data = chart.data || []
+  const xKey = chart.xKey || "x"
+  const keys = chart.seriesKeys || []
+  return (
+    <CardShell title={chart.title}>
+      <div className="h-[300px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <BarChart data={data} margin={{ top: 8, right: 24, left: 8, bottom: 64 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey={xKey} angle={-20} textAnchor="end" interval={0} height={72} />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            {keys.map((key, idx) => (
+              <Bar
+                key={key}
+                dataKey={key}
+                stackId="s"
+                fill={
+                  activeFilter?.chartId === chart.id && activeFilter.seriesKey === key
+                    ? "#1d4ed8"
+                    : PIE_COLORS[idx % PIE_COLORS.length]
+                }
+                onClick={(entry: { payload?: Record<string, unknown> }) => {
+                  const payload = entry?.payload
+                  if (!payload) return
+                  onSelect({
+                    chartId: chart.id,
+                    chartType: chart.type,
+                    label: `${chart.title}: ${String(payload[xKey] ?? "")} / ${key}`,
+                    payload,
+                    seriesKey: key,
+                  })
+                }}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </CardShell>
+  )
+}
 
-    const fieldCards: React.ReactNode[] = []
-    const numericFields: { field: Field; values: number[] }[] = []
+function FunnelCard({
+  chart,
+  activeFilter,
+  onSelect,
+}: {
+  chart: Extract<AnalyticsChart, { type: "funnel" }>
+  activeFilter: DrilldownFilter | null
+  onSelect: (filter: DrilldownFilter) => void
+}) {
+  const data = chart.data || []
+  const stageKey = chart.xKey || "stage"
+  return (
+    <CardShell title={chart.title}>
+      <div className="h-[280px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <BarChart data={data} layout="vertical" margin={{ top: 8, right: 24, left: 24, bottom: 16 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" />
+            <YAxis type="category" dataKey={stageKey} />
+            <Tooltip />
+            <Bar dataKey={chart.yKey || "value"} radius={[6, 6, 6, 6]}>
+              {data.map((entry, idx) => {
+                const selected =
+                  activeFilter?.chartId === chart.id &&
+                  String(activeFilter.payload[stageKey] ?? "") === String(entry[stageKey] ?? "")
+                return (
+                  <Cell
+                    key={`${chart.id}-funnel-${idx}`}
+                    fill={selected ? "#1d4ed8" : BAR_COLOR}
+                    cursor="pointer"
+                    onClick={() =>
+                      onSelect({
+                        chartId: chart.id,
+                        chartType: chart.type,
+                        label: `${chart.title}: ${String(entry[stageKey] ?? "")}`,
+                        payload: entry as Record<string, unknown>,
+                      })
+                    }
+                  />
+                )
+              })}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </CardShell>
+  )
+}
 
-    fields.forEach((field) => {
-      const rawValues = submissions
-        .map((s) => s.data?.[field.id])
-        .filter((v) => v !== null && v !== undefined && v !== "")
+function MetricsCard({ metrics }: { metrics: Record<string, unknown> }) {
+  const entries = Object.entries(metrics)
+  const formatValue = (value: unknown) => {
+    if (value === null || value === undefined) return "-"
+    if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2)
+    if (typeof value === "string" || typeof value === "boolean") return String(value)
+    if (Array.isArray(value)) return `${value.length} items`
+    if (typeof value === "object") return `${Object.keys(value as Record<string, unknown>).length} entries`
+    return String(value)
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {entries.map(([key, value]) => (
+        <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-medium text-slate-500">{key}</p>
+          <p className="mt-1 text-xl font-semibold text-slate-900">
+            {formatValue(value)}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
 
-      if (rawValues.length === 0) return
-      if (isIdentifierLikeField(field)) return
+function renderChart(chart: AnalyticsChart, activeFilter: DrilldownFilter | null, onSelect: (filter: DrilldownFilter) => void) {
+  if (chart.type === "box") return <BoxPlotCard chart={chart} activeFilter={activeFilter} onSelect={onSelect} />
+  if (chart.type === "scatter") return <ScatterCard chart={chart} onSelect={onSelect} />
+  if (chart.type === "bar" || chart.type === "line" || chart.type === "histogram") {
+    return <BarOrLineCard chart={chart} activeFilter={activeFilter} onSelect={onSelect} />
+  }
+  if (chart.type === "pie") return <PieCard chart={chart} activeFilter={activeFilter} onSelect={onSelect} />
+  if (chart.type === "stackedBar") return <StackedBarCard chart={chart} activeFilter={activeFilter} onSelect={onSelect} />
+  if (chart.type === "funnel") return <FunnelCard chart={chart} activeFilter={activeFilter} onSelect={onSelect} />
+  return (
+    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+      Unsupported chart type.
+    </div>
+  )
+}
 
-      const kind = inferKind(field, rawValues)
+export default function DynamicAnalytics({
+  fields,
+  submissions,
+  formTitle,
+}: {
+  fields: Field[]
+  submissions: Submission[]
+  formTitle: string
+}) {
+  const [activeFilter, setActiveFilter] = useState<DrilldownFilter | null>(null)
+  const [showModal, setShowModal] = useState(false)
 
-      if (kind === "categorical") {
-        const isMulti = (field.type || "").toLowerCase() === "checkbox"
-        const values = (isMulti ? rawValues.flatMap((v) => (Array.isArray(v) ? v : [v])) : rawValues)
-          .map((v) => normalizeText(v))
-          .filter((v) => v !== "")
-        if (values.length === 0) return
+  const baseAnalytics = useMemo(
+    () => buildAnalytics(fields, submissions, formTitle),
+    [fields, submissions, formTitle]
+  )
 
-        const countsRaw = buildCountMap(values)
-        const counts = sortCountMap(countsRaw, field.options)
-        const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
-        const topInsight = top ? `Most responses fall into "${top[0]}" (${formatPercent(top[1], values.length)}).` : undefined
-        const preferPie = !isMulti
-        fieldCards.push(
-          <BarOrPie
-            key={field.id}
-            title={field.label}
-            counts={counts}
-            total={values.length}
-            insight={topInsight}
-            preferPie={preferPie}
-          />
-        )
-        return
+  const filteredSubmissions = useMemo(() => {
+    if (!activeFilter) return submissions
+    const chart = baseAnalytics.charts.find((c) => c.id === activeFilter.chartId)
+    if (!chart) return submissions
+
+    if (chart.type === "histogram") {
+      const bucket = String(activeFilter.payload[chart.xKey || "bucket"] ?? "")
+      const range = parseBucketRange(bucket)
+      const fieldId = inferFieldId(fields, chart)
+      if (!range || !fieldId) return submissions
+      return submissions.filter((s) => {
+        const n = parseNumberLike(s.data[fieldId])
+        return n !== null && n >= range.min && n <= range.max
+      })
+    }
+
+    if (chart.type === "box") {
+      const min = parseNumberLike(activeFilter.payload.min)
+      const max = parseNumberLike(activeFilter.payload.max)
+      const fieldId = inferFieldId(fields, chart)
+      if (min === null || max === null || !fieldId) return submissions
+      return submissions.filter((s) => {
+        const n = parseNumberLike(s.data[fieldId])
+        return n !== null && n >= min && n <= max
+      })
+    }
+
+    if (chart.type === "funnel") {
+      const key = chart.xKey || "stage"
+      const selected = normalize(activeFilter.payload[key])
+      if (!selected) return submissions
+      const statusFieldId = inferFieldId(fields, chart, [key, "status"])
+      if (statusFieldId) {
+        return submissions.filter((s) => matchesCategorySelection(s.data[statusFieldId], selected))
       }
+      return submissions.filter((s) => Object.values(s.data).some((v) => matchesCategorySelection(v, selected)))
+    }
 
-      if (kind === "numeric") {
-        const indexPoints: { x: number; y: number }[] = []
-        const timePoints: { x: number; y: number }[] = []
+    if (chart.type === "bar" || chart.type === "pie") {
+      const key = chart.xKey || "label"
+      const selected = normalize(activeFilter.payload[key])
+      const fieldId = inferFieldId(fields, chart, [key])
+      if (!selected) return submissions
+      if (fieldId) {
+        return submissions.filter((s) => matchesCategorySelection(s.data[fieldId], selected))
+      }
+      return submissions.filter((s) =>
+        Object.values(s.data).some((value) => matchesCategorySelection(value, selected))
+      )
+    }
 
-        submissions.forEach((s) => {
-          const raw = s.data?.[field.id]
-          if (raw === null || raw === undefined || raw === "") return
-          const y = typeof raw === "number" ? raw : parseNumberLike(raw)
-          if (y === null || !Number.isFinite(y)) return
-          indexPoints.push({ x: indexPoints.length + 1, y })
-          const createdAt = s.createdAt ? parseDateLike(s.createdAt) : null
-          if (createdAt) timePoints.push({ x: createdAt.getTime(), y })
+    if (chart.type === "line") {
+      const key = chart.xKey || "period"
+      const selected = String(activeFilter.payload[key] ?? "")
+      const dateFieldId = inferFieldId(fields, chart, ["offer date", "date", "establishment"])
+      if (!selected) return submissions
+      if (dateFieldId) {
+        return submissions.filter((s) => {
+          const d = new Date(String(s.data[dateFieldId] ?? ""))
+          if (Number.isNaN(d.getTime())) return false
+          const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+          return ym === selected
         })
-
-        const useTime = timePoints.length >= Math.max(3, Math.round(indexPoints.length * 0.7))
-        const points = useTime ? timePoints.sort((a, b) => a.x - b.x) : indexPoints
-        const numbers = points.map((p) => p.y)
-
-        if (numbers.length < 3) return
-        numericFields.push({ field, values: numbers })
-        fieldCards.push(
-          <NumericCard
-            key={field.id}
-            title={field.label}
-            numbers={numbers}
-            totalSubmissions={totalSubmissions}
-            points={points}
-            xMode={useTime ? "time" : "index"}
-          />
-        )
-        return
       }
+      return submissions
+    }
 
-      if (kind === "date") {
-        const dates = rawValues.map((v) => parseDateLike(v)).filter((v): v is Date => v !== null)
-        if (dates.length < 3) return
-        fieldCards.push(
-          <DateTrendCard key={field.id} title={field.label} dates={dates} totalSubmissions={totalSubmissions} />
-        )
-        return
+    if (chart.type === "stackedBar") {
+      const xVal = normalize(activeFilter.payload[chart.xKey || "x"])
+      const series = normalize(activeFilter.seriesKey)
+      const internshipField = fields.find((f) => f.label.toLowerCase().includes("internship"))?.id
+      const placementField =
+        fields.find((f) => f.label.toLowerCase().includes("placement status"))?.id ||
+        fields.find((f) => f.label.toLowerCase().includes("placement"))?.id
+      if (internshipField && placementField) {
+        return submissions.filter((s) => {
+          const i = toBooleanLike(s.data[internshipField])
+          const p = toBooleanLike(s.data[placementField])
+          if (i === null || p === null) return false
+          const internshipMatch =
+            (xVal.includes("no internship") && i === false) ||
+            ((xVal.includes("internship") && !xVal.includes("no")) && i === true)
+          const placementMatch =
+            ((series.includes("placed") && !series.includes("not")) && p === true) ||
+            ((series.includes("not") || series.includes("no")) && p === false)
+          return internshipMatch && placementMatch
+        })
       }
+      return submissions.filter((s) =>
+        Object.values(s.data).some((v) => normalize(v) === xVal || normalize(v) === series)
+      )
+    }
 
-      const texts = rawValues.map((v) => normalizeText(v)).filter((v) => v !== "")
-      if (texts.length === 0) return
-      fieldCards.push(<KeywordsCard key={field.id} title={field.label} texts={texts} totalSubmissions={totalSubmissions} />)
-    })
+    if (chart.type === "scatter") {
+      const xFieldId = inferFieldId(fields, chart, [chart.xKey || ""])
+      const yFieldId = inferFieldId(fields, chart, [chart.yKey || ""])
+      const xVal = parseNumberLike(activeFilter.payload[chart.xKey || "x"])
+      const yVal = parseNumberLike(activeFilter.payload[chart.yKey || "y"])
+      if (!xFieldId || !yFieldId || xVal === null || yVal === null) return submissions
+      const withDistance = submissions
+        .map((s) => {
+          const x = parseNumberLike(s.data[xFieldId])
+          const y = parseNumberLike(s.data[yFieldId])
+          if (x === null || y === null) return null
+          return { s, dist: Math.sqrt((x - xVal) ** 2 + (y - yVal) ** 2) }
+        })
+        .filter((r): r is { s: Submission; dist: number } => r !== null)
+        .sort((a, b) => a.dist - b.dist)
+      return withDistance.slice(0, Math.min(15, withDistance.length)).map((r) => r.s)
+    }
 
-    const relationship = (() => {
-      if (numericFields.length < 2) return null
-      let best:
-        | {
-            xField: Field
-            yField: Field
-            points: { x: number; y: number }[]
-            corr: number | null
-          }
-        | null = null
+    return submissions
+  }, [activeFilter, baseAnalytics.charts, fields, submissions])
 
-      for (let i = 0; i < numericFields.length; i++) {
-        for (let j = i + 1; j < numericFields.length; j++) {
-          const xF = numericFields[i].field
-          const yF = numericFields[j].field
-          const points: { x: number; y: number }[] = []
-          const xs: number[] = []
-          const ys: number[] = []
+  const filteredAnalytics = useMemo(
+    () => buildAnalytics(fields, filteredSubmissions, formTitle),
+    [fields, filteredSubmissions, formTitle]
+  )
 
-          submissions.forEach((s) => {
-            const xRaw = s.data?.[xF.id]
-            const yRaw = s.data?.[yF.id]
-            const x = typeof xRaw === "number" ? xRaw : parseNumberLike(xRaw)
-            const y = typeof yRaw === "number" ? yRaw : parseNumberLike(yRaw)
-            if (x === null || y === null) return
-            points.push({ x, y })
-            xs.push(x)
-            ys.push(y)
-          })
+  const chartBuckets = useMemo(() => {
+    const distribution = baseAnalytics.charts.filter((c) => ["bar", "histogram", "pie", "box", "funnel"].includes(c.type))
+    const relationship = baseAnalytics.charts.filter((c) => ["scatter", "stackedBar"].includes(c.type))
+    const trends = baseAnalytics.charts.filter((c) => c.type === "line")
+    return { distribution, relationship, trends }
+  }, [baseAnalytics.charts])
 
-          if (points.length < 10) continue
-          const corr = pearsonCorrelation(xs, ys)
-          const score = corr === null ? 0 : Math.abs(corr)
-          if (!best || score > (best.corr === null ? 0 : Math.abs(best.corr))) {
-            best = { xField: xF, yField: yF, points, corr }
-          }
-        }
-      }
+  const handleSelect = (filter: DrilldownFilter) => {
+    if (
+      activeFilter &&
+      activeFilter.chartId === filter.chartId &&
+      activeFilter.label === filter.label &&
+      activeFilter.seriesKey === filter.seriesKey
+    ) {
+      setActiveFilter(null)
+      setShowModal(false)
+      return
+    }
+    setActiveFilter(filter)
+    setShowModal(true)
+  }
 
-      return best
-    })()
-
-    const submissionTrend = (() => {
-      if (submissionDates.length < 3) return null
-      const sorted = [...submissionDates].sort((a, b) => a.getTime() - b.getTime())
-      const earliest = sorted[0]
-      const latest = sorted[sorted.length - 1]
-      const spanDays = Math.max(1, Math.round((latest.getTime() - earliest.getTime()) / (24 * 60 * 60 * 1000)))
-      const keyFn = spanDays > 60 ? weekKey : dayKey
-      const counts: Record<string, number> = {}
-      sorted.forEach((d) => {
-        const k = keyFn(d)
-        counts[k] = (counts[k] || 0) + 1
-      })
-      const series = Object.entries(counts)
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([date, value]) => ({ date, value }))
-      const peak = series.reduce((acc, cur) => (cur.value > acc.value ? cur : acc), series[0])
-      return { earliest, latest, series, peak }
-    })()
-
-    const overview = (() => {
-      const totalFields = fields.length
-      const totalResponses = totalSubmissions
-      const responseRange = submissionTrend
-        ? `${submissionTrend.earliest.toLocaleDateString()} → ${submissionTrend.latest.toLocaleDateString()}`
-        : "N/A"
-
-      const filledCounts = fields.map((f) => {
-        const filled = submissions.filter((s) => s.data?.[f.id] !== null && s.data?.[f.id] !== undefined && s.data?.[f.id] !== "").length
-        return { field: f, filled }
-      })
-      const best = filledCounts.reduce((acc, cur) => (cur.filled > acc.filled ? cur : acc), filledCounts[0] || null)
-      const worst = filledCounts.reduce((acc, cur) => (cur.filled < acc.filled ? cur : acc), filledCounts[0] || null)
-
-      return {
-        totalFields,
-        totalResponses,
-        responseRange,
-        mostAnswered: best ? `${best.field.label} (${formatPercent(best.filled, totalResponses)})` : "N/A",
-        leastAnswered: worst ? `${worst.field.label} (${formatPercent(worst.filled, totalResponses)})` : "N/A",
-      }
-    })()
-
-    return { overview, fieldCards, relationship, submissionTrend }
-  }, [fields, submissions])
+  const clearFilter = () => {
+    setActiveFilter(null)
+    setShowModal(false)
+  }
 
   return (
     <div className="space-y-8">
+      {activeFilter ? (
+        <section className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium text-indigo-900">Filter: {activeFilter.label}</p>
+            <button
+              type="button"
+              onClick={clearFilter}
+              className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-indigo-700 shadow-sm ring-1 ring-indigo-200 hover:bg-indigo-100"
+            >
+              Clear Filter
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-indigo-700">Showing {filteredSubmissions.length} matching records.</p>
+        </section>
+      ) : null}
+
       <section>
-        <SectionTitle
-          title="Overview"
-          subtitle="Auto-generated summary based on your form schema and collected responses."
-        />
+        <SectionTitle title="Overview" subtitle="Schema-aware analytics generated from actual field values and response patterns." />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Total Responses</p>
-            <p className="mt-1 text-3xl font-bold text-slate-900">{computed.overview.totalResponses}</p>
+            <p className="mt-1 text-3xl font-bold text-slate-900">{filteredSubmissions.length}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-medium text-slate-500">Fields</p>
-            <p className="mt-1 text-3xl font-bold text-slate-900">{computed.overview.totalFields}</p>
+            <p className="mt-1 text-3xl font-bold text-slate-900">{fields.length}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Response Range</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{computed.overview.responseRange}</p>
+            <p className="text-sm font-medium text-slate-500">Charts</p>
+            <p className="mt-1 text-3xl font-bold text-slate-900">{baseAnalytics.charts.length}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">Most Answered Field</p>
-            <p className="mt-2 text-sm font-semibold text-slate-900">{computed.overview.mostAnswered}</p>
+            <p className="text-sm font-medium text-slate-500">Insights Generated</p>
+            <p className="mt-1 text-3xl font-bold text-slate-900">{filteredAnalytics.insights.length}</p>
           </div>
         </div>
       </section>
 
       <section>
-        <SectionTitle
-          title="Field-wise Analysis"
-          subtitle="Each card adapts automatically based on detected field type and response patterns."
-        />
-        {computed.fieldCards.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
-            Not enough data to generate field-wise analytics yet.
+        <SectionTitle title="Metrics" subtitle="Core KPIs extracted from relevant numeric, categorical, and boolean fields." />
+        {Object.keys(filteredAnalytics.metrics).length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+            No metrics available for this form.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {computed.fieldCards}
+          <MetricsCard metrics={filteredAnalytics.metrics} />
+        )}
+      </section>
+
+      <section>
+        <SectionTitle title="Section 1: Key Insights" subtitle="Non-generic findings inferred from this form's specific submission patterns." />
+        {filteredAnalytics.insights.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm text-slate-500">
+            No insights available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3">
+            {filteredAnalytics.insights.map((insight, idx) => (
+              <div key={`${idx}-${insight}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-sm font-medium text-slate-800">{insight}</p>
+              </div>
+            ))}
           </div>
         )}
       </section>
 
       <section>
         <SectionTitle
-          title="Trends"
-          subtitle="Time trends and simple relationships (generated only if the required data exists)."
+          title="Section 2: Distributions"
+          subtitle="Spread and frequency views for relevant measures and categories."
         />
-
-        <div className="grid grid-cols-1 gap-6">
-          {computed.submissionTrend ? (
-            <CardShell
-              title="Submission Activity Over Time"
-              meta={`Peak: ${computed.submissionTrend.peak.date} (${computed.submissionTrend.peak.value})`}
-            >
-              <div className="mb-3 flex flex-wrap gap-2">
-                <InsightPill text={`Earliest: ${computed.submissionTrend.earliest.toLocaleDateString()}`} />
-                <InsightPill text={`Latest: ${computed.submissionTrend.latest.toLocaleDateString()}`} />
-                <InsightPill text="Line chart" />
-              </div>
-              <div className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={computed.submissionTrend.series} margin={{ top: 8, right: 24, left: 8, bottom: 32 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" interval="preserveStartEnd" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="value" stroke={BAR_COLOR} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardShell>
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-              No submission timestamp trend available yet.
-            </div>
-          )}
-
-          {computed.relationship ? (
-            <RelationshipCard
-              title="Numeric Relationship"
-              xLabel={computed.relationship.xField.label}
-              yLabel={computed.relationship.yField.label}
-              points={computed.relationship.points}
-              correlation={computed.relationship.corr}
-            />
-          ) : (
-            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-              Not enough numeric data to generate a relationship chart.
-            </div>
-          )}
-        </div>
+        {chartBuckets.distribution.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+            No distribution charts available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6">
+            {chartBuckets.distribution.map((chart) => (
+              <div key={chart.id}>{renderChart(chart, activeFilter, handleSelect)}</div>
+            ))}
+          </div>
+        )}
       </section>
+
+      <section>
+        <SectionTitle
+          title="Section 3: Relationships"
+          subtitle="Cross-field relationships where interactions materially affect outcomes."
+        />
+        {chartBuckets.relationship.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+            No relationship charts available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6">
+            {chartBuckets.relationship.map((chart) => (
+              <div key={chart.id}>{renderChart(chart, activeFilter, handleSelect)}</div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <SectionTitle title="Section 4: Trends" subtitle="Line charts for change over time and domain growth patterns." />
+        {chartBuckets.trends.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+            No trend lines available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6">
+            {chartBuckets.trends.map((chart) => (
+              <div key={chart.id}>{renderChart(chart, activeFilter, handleSelect)}</div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <SectionTitle title="Actions" subtitle="Recommended next actions from this form's strict analytics logic." />
+        {filteredAnalytics.actions.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+            No actions available.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3">
+            {filteredAnalytics.actions.map((action, idx) => (
+              <div key={`${idx}-${action}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-sm font-medium text-slate-800">{action}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showModal && activeFilter ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={clearFilter}>
+          <div
+            className="max-h-[85vh] w-full max-w-6xl overflow-hidden rounded-xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Filtered Records</h3>
+                <p className="text-xs text-slate-500">{activeFilter.label}</p>
+              </div>
+              <button
+                type="button"
+                onClick={clearFilter}
+                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto p-4">
+              {filteredSubmissions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  No matching records for this selection.
+                </div>
+              ) : (
+                <table className="min-w-full border-collapse text-left text-sm">
+                  <thead className="sticky top-0 bg-slate-100">
+                    <tr>
+                      <th className="border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">#</th>
+                      {fields.map((field) => (
+                        <th key={field.id} className="border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+                          {field.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSubmissions.slice(0, 200).map((submission, rowIndex) => (
+                      <tr key={rowIndex} className="odd:bg-white even:bg-slate-50">
+                        <td className="border border-slate-200 px-3 py-2 text-xs text-slate-500">{rowIndex + 1}</td>
+                        {fields.map((field) => {
+                          const value = submission.data[field.id]
+                          return (
+                            <td key={`${rowIndex}-${field.id}`} className="border border-slate-200 px-3 py-2 text-slate-800">
+                              {Array.isArray(value) ? value.join(", ") : String(value ?? "-")}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

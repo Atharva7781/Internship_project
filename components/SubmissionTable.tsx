@@ -42,6 +42,12 @@ interface FilterDefinition {
   sortable?: boolean;
 }
 
+interface VisibleColumn {
+  id: string;
+  label: string;
+  getValue: (submission: NormalizedSubmission) => unknown;
+}
+
 interface SortOption {
   value: string;
   label: string;
@@ -79,11 +85,12 @@ export default function SubmissionTable({
   const normalizedSubmissions = useMemo<NormalizedSubmission[]>(() => {
     return submissions.map((submission) => {
       const payload = parsePayload(submission.data);
+      const payloadSearch = Object.values(payload).map((value) => stringifyValue(value)).join(' ');
       return {
         ...submission,
         payload,
         submittedAtMs: new Date(submission.createdAt).getTime(),
-        searchText: `${submission.studentName} ${submission.studentEmail}`.toLowerCase(),
+        searchText: `${submission.studentName} ${submission.studentEmail} ${submission.studentRoll} ${payloadSearch}`.toLowerCase(),
       };
     });
   }, [submissions]);
@@ -176,7 +183,7 @@ export default function SubmissionTable({
       filters.every((filter) => evaluateFilter(submission, filter, filterDefinitionMap))
     );
 
-    const [sortField, direction] = sortBy.split(':') as [string, SortDirection];
+    const { field: sortField, direction } = parseSortBy(sortBy);
     const sortDefinition = filterDefinitionMap.get(sortField);
     const sorted = [...visible];
 
@@ -197,6 +204,15 @@ export default function SubmissionTable({
 
     return sorted;
   }, [filterDefinitionMap, filters, normalizedSubmissions, sortBy]);
+
+  const visibleColumns = useMemo<VisibleColumn[]>(() => {
+    const selectedFields = selectImportantFields(formFields, formTitle, normalizedSubmissions).slice(0, 6);
+    return selectedFields.map((field) => ({
+      id: field.id,
+      label: field.label,
+      getValue: (submission) => getSubmissionFieldValue(submission.payload, field),
+    }));
+  }, [formFields, formTitle, normalizedSubmissions]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -306,6 +322,19 @@ export default function SubmissionTable({
         Boolean(data.sort?.field && data.sort?.direction);
 
       if (!hasMeaningfulResult) {
+        const fallback = parseLocalStructuredFilters(query, aiFilterDefinitions);
+        if (fallback && fallback.filters.length > 0) {
+          const fallbackSearch = fallback.filters.find(
+            (filter) => filter.field === 'search' && typeof filter.value === 'string'
+          );
+          const fallbackNonSearch = fallback.filters.filter((filter) => filter.field !== 'search');
+          setFilters(fallbackNonSearch);
+          setSearchInput(fallbackSearch?.value ? String(fallbackSearch.value) : '');
+          setAiSummary(fallback.summary);
+          setIsFilterComposerOpen(false);
+          return;
+        }
+
         const hintLabels = filterDefinitions
           .filter((definition) => definition.id !== 'submittedAt' && definition.id !== 'studentRoll')
           .slice(0, 6)
@@ -507,6 +536,11 @@ export default function SubmissionTable({
               <th className="px-6 py-4 text-sm font-semibold text-slate-700">Student Name</th>
               <th className="px-6 py-4 text-sm font-semibold text-slate-700">Roll No.</th>
               <th className="px-6 py-4 text-sm font-semibold text-slate-700">Email</th>
+              {visibleColumns.map((column) => (
+                <th key={column.id} className="px-6 py-4 text-sm font-semibold text-slate-700">
+                  {column.label}
+                </th>
+              ))}
               <th className="px-6 py-4 text-sm font-semibold text-slate-700">Submitted At</th>
               <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700">Actions</th>
             </tr>
@@ -514,7 +548,7 @@ export default function SubmissionTable({
           <tbody className="divide-y divide-slate-200">
             {filteredSubmissions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-sm text-slate-500">
+                <td colSpan={5 + visibleColumns.length} className="px-6 py-12 text-center text-sm text-slate-500">
                   {submissions.length === 0 ? 'No submissions yet.' : 'No submissions match the current filters.'}
                 </td>
               </tr>
@@ -528,6 +562,14 @@ export default function SubmissionTable({
                     <td className="px-6 py-4 font-medium text-slate-900">{submission.studentName}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{submission.studentRoll}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{submission.studentEmail}</td>
+                    {visibleColumns.map((column) => {
+                      const value = column.getValue(submission);
+                      return (
+                        <td key={`${submission.id}-${column.id}`} className="px-6 py-4 text-sm text-slate-700">
+                          {formatCellValue(value)}
+                        </td>
+                      );
+                    })}
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {new Date(submission.createdAt).toLocaleString()}
                     </td>
@@ -545,7 +587,7 @@ export default function SubmissionTable({
                   </tr>
                   {expandedId === submission.id && (
                     <tr className="bg-slate-50">
-                      <td colSpan={5} className="px-6 py-4">
+                      <td colSpan={5 + visibleColumns.length} className="px-6 py-4">
                         <div className="rounded-lg border border-slate-200 bg-white p-4">
                           <h4 className="mb-3 font-semibold text-slate-900">Form Response</h4>
                           <div className="space-y-3">
@@ -771,12 +813,28 @@ function getSubmissionFieldValue(payload: Record<string, unknown>, field: Pick<F
 function toComparableNumber(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
-    const match = value.match(/-?\d+(\.\d+)?/);
+    const normalized = value.toLowerCase().replace(/[,₹$]/g, ' ').trim();
+    const match = normalized.match(/-?\d+(\.\d+)?/);
     if (!match) return null;
-    const parsed = Number(match[0]);
-    return Number.isFinite(parsed) ? parsed : null;
+    let parsed = Number(match[0]);
+    if (!Number.isFinite(parsed)) return null;
+    if (/\bcrore\b|\bcr\b/.test(normalized)) parsed *= 100;
+    else if (/\blakh\b|\blac\b|\blpa\b/.test(normalized)) parsed *= 1;
+    return parsed;
   }
   return null;
+}
+
+function parseSortBy(value: string): { field: string; direction: SortDirection } {
+  const lastColon = value.lastIndexOf(':');
+  if (lastColon <= 0) {
+    return { field: 'submittedAt', direction: 'desc' };
+  }
+
+  const field = value.slice(0, lastColon);
+  const rawDirection = value.slice(lastColon + 1);
+  const direction: SortDirection = rawDirection === 'asc' ? 'asc' : 'desc';
+  return { field, direction };
 }
 
 function toComparableDate(value: unknown) {
@@ -1075,4 +1133,163 @@ function isUrl(val: string) {
       val.startsWith('/uploads/') ||
       /\.(pdf|docx?|xlsx?|png|jpg|jpeg|gif|pptx?)$/i.test(val))
   );
+}
+
+function formatCellValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => String(item)).join(', ') : '—';
+  }
+  if (typeof value === 'string') {
+    if (!value.trim()) return '—';
+    if (isUrl(value)) {
+      return (
+        <a href={value} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+          Open
+        </a>
+      );
+    }
+    return value;
+  }
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return '—';
+  return JSON.stringify(value);
+}
+
+function selectImportantFields(
+  formFields: FormField[],
+  formTitle: string,
+  submissions: NormalizedSubmission[]
+) {
+  const title = normalizeKey(formTitle || '');
+  const labels = formFields.map((field) => ({ field, label: normalizeKey(field.label) }));
+  const has = (tokens: string[]) => labels.some(({ label }) => tokens.some((token) => label.includes(token)));
+  const pickByTokens = (tokens: string[]) => {
+    const picked: FormField[] = [];
+    for (const token of tokens) {
+      const match = labels.find(({ field, label }) => label.includes(token) && !picked.some((p) => p.id === field.id));
+      if (match) picked.push(match.field);
+    }
+    return picked;
+  };
+
+  let priorityTokens: string[] = [];
+  if (title.includes('placement') || has(['package', 'ctc', 'job role'])) {
+    priorityTokens = ['company', 'organization', 'job role', 'role', 'package', 'ctc', 'specialisation', 'specialization', 'offer date', 'placement type'];
+  } else if (title.includes('academic') || has(['cgpa', 'backlog', 'attendance'])) {
+    priorityTokens = ['cgpa', 'placement status', 'internship', 'backlog', 'attendance', 'skills', 'department'];
+  } else if (title.includes('event') || has(['budget', 'revenue'])) {
+    priorityTokens = ['event details', 'category', 'budget', 'revenue', 'duration', 'date', 'club'];
+  } else if (title.includes('internship') || has(['stipend', 'internship mode'])) {
+    priorityTokens = ['company', 'organization', 'role', 'domain', 'stipend', 'duration', 'start date', 'end date'];
+  } else if (title.includes('research') || title.includes('seminar') || title.includes('capstone') || has(['keywords', 'abstract'])) {
+    priorityTokens = ['project title', 'title', 'keywords', 'paper published', 'semester', 'specialisation', 'batch'];
+  } else {
+    priorityTokens = ['category', 'status', 'year', 'type', 'company', 'role', 'date'];
+  }
+
+  const selected: FormField[] = [];
+  for (const field of pickByTokens(priorityTokens)) {
+    if (!selected.some((item) => item.id === field.id) && !isLinkLikeField(normalizeKey(field.label)) && field.type !== 'file') {
+      selected.push(field);
+    }
+  }
+
+  if (selected.length < 5) {
+    const withSignal = formFields
+      .filter((field) => !selected.some((item) => item.id === field.id) && field.type !== 'file' && !isLinkLikeField(normalizeKey(field.label)))
+      .map((field) => {
+        const populated = submissions.filter((submission) => {
+          const value = getSubmissionFieldValue(submission.payload, field);
+          return value !== null && value !== undefined && stringifyValue(value).trim() !== '';
+        }).length;
+        return { field, populated };
+      })
+      .filter((row) => row.populated > 0)
+      .sort((a, b) => b.populated - a.populated);
+
+    for (const row of withSignal) {
+      if (selected.length >= 7) break;
+      selected.push(row.field);
+    }
+  }
+
+  return selected.slice(0, 7);
+}
+
+function parseLocalStructuredFilters(
+  query: string,
+  filterDefinitions: Array<{
+    id: string;
+    label: string;
+    kind: FilterKind;
+    operators: FilterOperator[];
+    options?: string[];
+  }>
+) {
+  const raw = query.trim();
+  if (!raw) return null;
+  const q = raw.toLowerCase();
+  const filters: Filter[] = [];
+
+  const numMatch = q.match(/(-?\d+(\.\d+)?)/);
+  const betweenMatch = q.match(/between\s+(-?\d+(\.\d+)?)\s+(and|to)\s+(-?\d+(\.\d+)?)/);
+  const comparator: FilterOperator | null =
+    betweenMatch
+      ? 'between'
+      : /(above|greater than|more than|over)\b/.test(q)
+        ? '>'
+        : /(below|less than|under)\b/.test(q)
+          ? '<'
+          : /(at least|minimum|>=)\b/.test(q)
+            ? '>='
+            : /(at most|maximum|<=)\b/.test(q)
+              ? '<='
+              : null;
+
+  const sortedDefs = [...filterDefinitions].sort((a, b) => b.label.length - a.label.length);
+  for (const definition of sortedDefs) {
+    const label = definition.label.toLowerCase();
+    const labelTokens = label.split(/\s+/).filter((token) => token.length > 2);
+    const labelMatched =
+      q.includes(label) ||
+      labelTokens.some((token) => q.includes(token)) ||
+      (label.includes('package') && q.includes('lpa')) ||
+      (label.includes('ctc') && q.includes('lpa'));
+
+    if (!labelMatched) continue;
+
+    if (definition.kind === 'number' && comparator && definition.operators.includes(comparator)) {
+      if (comparator === 'between' && betweenMatch && definition.operators.includes('between')) {
+        filters.push({
+          field: definition.id,
+          operator: 'between',
+          value: { min: Number(betweenMatch[1]), max: Number(betweenMatch[4]) },
+        });
+        continue;
+      }
+      if (numMatch) {
+        filters.push({ field: definition.id, operator: comparator, value: Number(numMatch[1]) });
+        continue;
+      }
+    }
+
+    if ((definition.kind === 'select' || definition.kind === 'text') && definition.options?.length) {
+      const matchedOption = definition.options.find((option) => q.includes(option.toLowerCase()));
+      if (matchedOption) {
+        filters.push({ field: definition.id, operator: 'equals', value: matchedOption });
+      }
+    }
+  }
+
+  if (filters.length === 0) {
+    return {
+      filters: [{ field: 'search', operator: 'contains', value: raw }],
+      summary: 'Applied fallback text search filter.',
+    };
+  }
+
+  return {
+    filters,
+    summary: `Applied ${filters.length} fallback structured filter${filters.length === 1 ? '' : 's'}.`,
+  };
 }

@@ -53,6 +53,12 @@ export default async function FormDashboard({
             >
               Download Excel
             </a>
+            <a
+              href={`/api/export-analytics/${formId}`}
+              className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+            >
+              Download Analytics PDF
+            </a>
             <DeleteFormButton formId={formId} />
           </div>
         </div>
@@ -99,7 +105,7 @@ export default async function FormDashboard({
             No responses yet. Analytics will appear after the first submission.
           </div>
         ) : (
-          <DynamicAnalytics fields={fields} submissions={submissionsForClient} />
+          <DynamicAnalytics fields={fields} submissions={submissionsForClient} formTitle={form.title} />
         )}
       </section>
     </div>

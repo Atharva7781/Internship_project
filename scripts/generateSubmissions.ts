@@ -71,7 +71,7 @@ async function main() {
   
   if (form) {
     const fields = JSON.parse(form.fields)
-    const analytics = buildAnalytics(fields, submissions)
+    const analytics = buildAnalytics(fields, submissions, form.title)
     
     await prisma.formAnalytics.upsert({
       where: { formId },

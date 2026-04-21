@@ -168,7 +168,7 @@ async function main() {
   }
 
   const latestSubmissions = await prisma.submission.findMany({ where: { formId: form.id } })
-  const analytics = buildAnalytics(fields as any, latestSubmissions as any)
+  const analytics = buildAnalytics(fields as any, latestSubmissions as any, form.title)
 
   await prisma.formAnalytics.upsert({
     where: { formId: form.id },
